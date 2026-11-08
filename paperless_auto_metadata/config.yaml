@@ -1,0 +1,38 @@
+name: Paperless Auto Metadata
+version: "1.1.0"
+slug: paperless_auto_metadata
+description: Extract bank payment OCR data into Paperless-ngx fields with an ingress web UI
+url: https://github.com/immortalserg/paperless-plugin
+arch:
+  - amd64
+  - aarch64
+  - armv7
+init: false
+startup: services
+boot: auto
+ingress: true
+ingress_port: 8099
+panel_icon: mdi:file-document-edit-outline
+panel_title: Paperless Metadata
+options:
+  paperless_url: "http://192.168.20.10:8000"
+  api_token: ""
+  poll_seconds: 30
+  scan_documents: 100
+  amount_field_id: 2
+  iban_field_id: 3
+  purpose_field_id: 4
+  amount_format: monetary
+  title_prefix: "оплата "
+  dry_run: true
+schema:
+  paperless_url: url
+  api_token: password
+  poll_seconds: int(10,3600)
+  scan_documents: int(1,1000)
+  amount_field_id: int(1,999999)
+  iban_field_id: int(1,999999)
+  purpose_field_id: int(1,999999)
+  amount_format: list(monetary|number|text)
+  title_prefix: str
+  dry_run: bool

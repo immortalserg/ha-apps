@@ -22,6 +22,8 @@ DATA = Path('/data')
 OPTIONS_FILE = DATA / 'options.json'
 SETTINGS_FILE = DATA / 'settings.json'
 STATE_FILE = DATA / 'processed.json'
+RULES_STATE_FILE = DATA / 'rules_processed.json'
+TRANSLATION_STATE_FILE = DATA / 'translation_processed.json'
 LOG = logging.getLogger('paperless-auto-metadata')
 DEFAULTS = {
     'paperless_url': '', 'api_token': '',
@@ -38,6 +40,7 @@ DEFAULTS = {
 lock = threading.RLock()
 status = {'last_scan': '—', 'updated': 0, 'dry_run': 0, 'skipped': 0, 'errors': 0, 'last_error': '', 'last_result': ''}
 run_now = threading.Event()
+full_translation_scan = threading.Event()
 
 
 def read_json(path, fallback):
@@ -196,46 +199,73 @@ def process(client, doc, opts):
     return 'updated'
 
 
-def scan_once():
+def scan_once(full_translation=False):
     opts = settings()
     if not opts['api_token']:
         raise ValueError('Set API token using the web interface or Home Assistant Configuration tab')
     if not opts.get('rules') and not opts.get('translate_enabled'):
         return {'updated': 0, 'dry_run': 0, 'skipped': 0, 'errors': 0}
     client = Paperless(opts['paperless_url'], opts['api_token'])
-    state = read_json(STATE_FILE, {})
-    documents = client.documents(int(opts['scan_documents']))
+    rules_state = read_json(RULES_STATE_FILE, {})
+    translation_state = read_json(TRANSLATION_STATE_FILE, {})
+    # Rules run only once for each document/content/rules combination. Translation
+    # has an independent cache so adding a tag or an empty field can trigger it later.
+    rules_opts = dict(opts, translate_enabled=False)
+    translation_opts = dict(opts, rules=[])
+    rules_config = hashlib.sha256(json.dumps(opts.get('rules', []), sort_keys=True).encode()).hexdigest()
+    translation_config = hashlib.sha256(json.dumps({
+        k: v for k, v in opts.items() if k.startswith('translate_')
+    }, sort_keys=True).encode()).hexdigest()
     counts = {'updated': 0, 'dry_run': 0, 'skipped': 0, 'errors': 0}
-    opts_fingerprint = hashlib.sha256(json.dumps({k: v for k, v in opts.items() if k not in ('api_token', 'paperless_url', 'poll_seconds', 'scan_documents')}, sort_keys=True).encode()).hexdigest()
-    for summary in reversed(documents):
+    recent = client.documents(int(opts['scan_documents']))
+    if full_translation and opts.get('translate_enabled'):
+        summaries = list(client.pages('/api/documents/?page_size=100&ordering=-id'))
+    else:
+        summaries = recent
+    recent_ids = {str(item['id']) for item in recent}
+    for summary in reversed(summaries):
         doc_id = str(summary['id'])
         try:
-            # The list endpoint can omit OCR content or return a shortened record.
-            # Always fetch the full document before matching and writing fields.
             doc = client.document(doc_id)
             content = doc.get('content') or ''
             if not content.strip():
-                # OCR may still be running. Never cache an empty document as done.
                 counts['skipped'] += 1
-                LOG.info('Document #%s has no OCR content yet; will retry', doc_id)
                 continue
-            fingerprint = hashlib.sha256(('v1.5-detail:' + opts_fingerprint + json.dumps({'content': content, 'tags': doc.get('tags'), 'custom_fields': doc.get('custom_fields')}, sort_keys=True, ensure_ascii=False)).encode()).hexdigest()
-            if state.get(doc_id) == fingerprint:
-                continue
-            outcome = process(client, doc, opts)
-            counts[outcome] += 1
-            # Only cache successful processing; skipped/unmatched documents can
-            # become matchable after OCR or rule changes.
-            if outcome in ('updated', 'dry_run'):
-                state[doc_id] = fingerprint
-                write_json(STATE_FILE, state)
+            if opts.get('rules') and doc_id in recent_ids:
+                rule_key = hashlib.sha256(('rules-v2:' + rules_config + content).encode()).hexdigest()
+                if rules_state.get(doc_id) != rule_key:
+                    outcome = process(client, doc, rules_opts)
+                    counts[outcome] += 1
+                    # A document with no matching rules is still marked as checked;
+                    # edits to tags/translation fields must not rerun regex rules.
+                    if outcome in ('updated', 'dry_run', 'skipped'):
+                        rules_state[doc_id] = rule_key
+                        write_json(RULES_STATE_FILE, rules_state)
+                    if outcome == 'updated':
+                        doc = client.document(doc_id)
+            if opts.get('translate_enabled'):
+                custom = {int(f['field']): f.get('value') for f in (doc.get('custom_fields') or [])}
+                target_id = int(opts.get('translate_field_id') or 0)
+                existing = custom.get(target_id)
+                field_empty = existing is None or (isinstance(existing, str) and not existing.strip())
+                # Never run translation again when the destination is filled.
+                if field_empty:
+                    key = hashlib.sha256(('translation-v2:' + translation_config +
+                        json.dumps({'content': content, 'tags': doc.get('tags'),
+                                    'field_present': target_id in custom,
+                                    'field_value': existing}, sort_keys=True,
+                                   ensure_ascii=False)).encode()).hexdigest()
+                    if translation_state.get(doc_id) != key:
+                        outcome = process(client, doc, translation_opts)
+                        counts[outcome] += 1
+                        if outcome in ('updated', 'dry_run'):
+                            translation_state[doc_id] = key
+                            write_json(TRANSLATION_STATE_FILE, translation_state)
+                else:
+                    counts['skipped'] += 1
         except (urllib.error.HTTPError, urllib.error.URLError, ValueError, KeyError, TypeError) as exc:
             counts['errors'] += 1
             LOG.error('Document #%s failed: %s', doc_id, exc)
-    # Bound persistent cache to recent document window plus a small historical buffer.
-    if len(state) > 10000:
-        state = {str(d['id']): state[str(d['id'])] for d in documents if str(d['id']) in state}
-        write_json(STATE_FILE, state)
     with lock:
         status['last_scan'] = time.strftime('%Y-%m-%d %H:%M:%S')
         for k, v in counts.items():
@@ -248,7 +278,8 @@ def scan_once():
 def worker():
     while True:
         try:
-            scan_once()
+            scan_once(full_translation=full_translation_scan.is_set())
+            full_translation_scan.clear()
         except Exception as exc:
             LOG.exception('Scan failed')
             with lock:
@@ -259,7 +290,7 @@ def worker():
 
 
 from rule_web import make_handler
-Handler = make_handler(settings, status, lock, run_now, Paperless, write_json, SETTINGS_FILE)
+Handler = make_handler(settings, status, lock, run_now, Paperless, write_json, SETTINGS_FILE, full_translation_scan)
 
 
 def main():

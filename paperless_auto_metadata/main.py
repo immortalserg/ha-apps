@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Paperless-ngx OCR metadata extraction with an ingress web interface."""
 import hashlib
+import hmac
+import secrets
 import html
 import json
 import logging
@@ -13,6 +15,7 @@ import urllib.request
 from decimal import Decimal, InvalidOperation
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from rules import DEFAULT_RULES, validate_rules, extract_rules, extraction_preview
 
 DATA = Path('/data')
 OPTIONS_FILE = DATA / 'options.json'
@@ -29,6 +32,8 @@ DEFAULTS = {
     'iban_regex': r'^\s*IBAN\s*:?\s*(LU(?:[ \t]*[A-Z0-9]){18})\b',
     'purpose_regex': r'^\s*Communication\s*:\s*([^\r\n]+)',
 }
+DEFAULTS['rules'] = DEFAULT_RULES
+csrf_token = secrets.token_urlsafe(32)
 lock = threading.RLock()
 status = {'last_scan': '—', 'updated': 0, 'dry_run': 0, 'skipped': 0, 'errors': 0, 'last_error': '', 'last_result': ''}
 run_now = threading.Event()
@@ -62,27 +67,15 @@ def capture(content, pattern):
 
 
 def extract(content, opts=None):
+    """Legacy preview shape, backed by user-configurable rules."""
     o = opts or DEFAULTS
-    name = capture(content, o['beneficiary_regex'])
-    purpose = capture(content, o['purpose_regex'])
-    raw_amount = capture(content, o['amount_regex'])
-    raw_iban = capture(content, o['iban_regex'])
-    if not all((name, purpose, raw_amount, raw_iban)):
+    matches = extract_rules(content, o.get('rules', DEFAULT_RULES))
+    if matches is None:
         return None
-    iban = re.sub(r'\s+', '', raw_iban).upper()
-    if not re.fullmatch(r'LU\d{18}', iban):
-        return None
-    number = re.sub(r'[\s\u00a0\u202f]', '', raw_amount)
-    if ',' in number:
-        number = number.replace('.', '').replace(',', '.')
-    try:
-        amount = Decimal(number).quantize(Decimal('0.01'))
-        if not amount.is_finite() or amount < 0:
-            return None
-    except InvalidOperation:
-        return None
-    return {'beneficiary': name, 'iban': iban, 'amount': str(amount), 'purpose': purpose,
-            'title': o['title_prefix'] + purpose}
+    values = {r['name']: r['value'] for r in matches}
+    if 'amount' in values and values['amount'].startswith(('EUR', 'USD')):
+        values['amount'] = values['amount'][3:]
+    return values
 
 
 class Paperless:
@@ -130,24 +123,33 @@ class Paperless:
 
 
 def process(client, doc, opts):
-    result = extract(doc.get('content') or '', opts)
-    if result is None:
+    matches = extract_rules(doc.get('content') or '', opts.get('rules', DEFAULT_RULES))
+    if matches is None:
         return 'skipped'
     custom = {int(f['field']): f['value'] for f in (doc.get('custom_fields') or [])}
-    amount = result['amount']
-    amount_value = 'EUR' + amount if opts['amount_format'] == 'monetary' else amount
-    custom[int(opts['amount_field_id'])] = amount_value
-    custom[int(opts['iban_field_id'])] = result['iban']
-    custom[int(opts['purpose_field_id'])] = result['purpose']
-    if opts['dry_run']:
-        LOG.info('DRY RUN #%s title=%r beneficiary=%r amount=%s iban=%s', doc['id'],
-                 result['title'], result['beneficiary'], amount_value, result['iban'])
+    payload = {}
+    beneficiary = None
+    for match in matches:
+        if match['target'] == 'custom_field':
+            custom[int(match['field_id'])] = match['value']
+        elif match['target'] == 'title':
+            payload['title'] = match['value']
+        elif match['target'] == 'correspondent':
+            beneficiary = match['value']
+    if opts.get('dry_run', True):
+        LOG.info('DRY RUN #%s mappings=%s', doc['id'],
+                 [(m['label'], m['target'], m['field_id'], m['value']) for m in matches])
         return 'dry_run'
-    correspondent = client.correspondent(result['beneficiary'])
-    payload = {'title': result['title'], 'correspondent': correspondent,
-               'custom_fields': [{'field': field, 'value': value} for field, value in sorted(custom.items())]}
+    if beneficiary is not None:
+        payload['correspondent'] = client.correspondent(beneficiary)
+    if custom != {int(f['field']): f['value'] for f in (doc.get('custom_fields') or [])}:
+        payload['custom_fields'] = [
+            {'field': field, 'value': value} for field, value in sorted(custom.items())
+        ]
+    if not payload:
+        return 'skipped'
     client.request('PATCH', f"/api/documents/{int(doc['id'])}/", payload)
-    LOG.info('Updated document #%s title=%r', doc['id'], result['title'])
+    LOG.info('Updated document #%s (%s rules)', doc['id'], len(matches))
     return 'updated'
 
 
@@ -200,110 +202,8 @@ def worker():
         run_now.clear()
 
 
-INPUTS = [
-    ('paperless_url', 'Адрес Paperless-ngx'),
-    ('api_token', 'API token (оставь пустым, чтобы сохранить действующий)'),
-    ('poll_seconds', 'Проверять каждые N секунд'),
-    ('scan_documents', 'Количество последних документов'),
-    ('amount_field_id', 'ID поля «Сумма документа»'),
-    ('iban_field_id', 'ID поля «IBAN корреспондента»'),
-    ('purpose_field_id', 'ID поля «Назначение»'),
-    ('title_prefix', 'Префикс названия'),
-    ('beneficiary_regex', 'Регулярное выражение Bénéficiaire'),
-    ('amount_regex', 'Регулярное выражение Montant'),
-    ('iban_regex', 'Регулярное выражение IBAN'),
-    ('purpose_regex', 'Регулярное выражение Communication'),
-]
-
-
-class Handler(BaseHTTPRequestHandler):
-    def send_html(self, body, code=200):
-        raw = body.encode('utf-8')
-        self.send_response(code)
-        self.send_header('Content-Type', 'text/html; charset=utf-8')
-        self.send_header('Cache-Control', 'no-store')
-        self.send_header('X-Content-Type-Options', 'nosniff')
-        self.send_header('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'self'; frame-ancestors 'self'")
-        self.send_header('Content-Length', str(len(raw)))
-        self.end_headers()
-        self.wfile.write(raw)
-
-    def do_GET(self):
-        opts = settings()
-        esc = lambda x: html.escape(str(x), quote=True)
-        rows = []
-        for key, label in INPUTS:
-            value = '' if key == 'api_token' else opts[key]
-            typ = 'password' if key == 'api_token' else 'text'
-            rows.append(f'<label>{esc(label)}<input name="{key}" type="{typ}" value="{esc(value)}" autocomplete="off"></label>')
-        with lock:
-            info = dict(status)
-        options = ''.join(f'<option value="{val}" {"selected" if opts["amount_format"] == val else ""}>{val}</option>' for val in ('monetary', 'number', 'text'))
-        checked = 'checked' if opts['dry_run'] else ''
-        info_html = ''.join(f'<p><b>{esc(k)}:</b> {esc(v)}</p>' for k, v in info.items())
-        self.send_html(f'''<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Paperless Auto Metadata</title><style>
-        body{{background:#f3f6fa;color:#162236;font:15px system-ui;margin:0;padding:20px}}main{{max-width:880px;margin:auto}}section{{background:white;border-radius:12px;padding:22px;margin:18px 0;box-shadow:0 2px 12px #0001}}h1{{margin:10px 0}}label{{display:block;margin:12px 0;font-weight:600}}input,select,textarea{{box-sizing:border-box;display:block;width:100%;padding:10px;margin-top:5px;border:1px solid #cbd5e1;border-radius:8px;font:inherit}}input[type=checkbox]{{display:inline;width:auto}}button{{background:#1473e6;color:white;border:0;padding:12px 18px;border-radius:8px;cursor:pointer}}pre{{white-space:pre-wrap;overflow-wrap:anywhere}}small{{color:#555}}</style></head><body><main>
-        <h1>Paperless Auto Metadata</h1><p>Автоматическое извлечение банковских реквизитов из OCR. Настройки сохраняются внутри дополнения.</p>
-        <section><h2>Статус</h2>{info_html}<form method="post"><input type="hidden" name="action" value="scan"><button>Проверить документы сейчас</button></form></section>
-        <section><h2>Настройки</h2><form method="post"><input type="hidden" name="action" value="save">{''.join(rows)}
-        <label>Формат суммы<select name="amount_format">{options}</select></label>
-        <label><input type="checkbox" name="dry_run" value="yes" {checked}> Тестовый режим (не изменять документы)</label>
-        <button>Сохранить настройки</button></form><small>API-токен не возвращается в браузер после сохранения. Для рабочей обработки выключи тестовый режим.</small></section>
-        <section><h2>Проверить текст OCR</h2><form method="post"><input type="hidden" name="action" value="test"><textarea name="sample" rows="7" placeholder="Вставь OCR-текст"></textarea><button>Извлечь реквизиты</button></form></section></main></body></html>''')
-
-    def do_POST(self):
-        length = int(self.headers.get('Content-Length', '0'))
-        if length > 100000:
-            self.send_error(413)
-            return
-        form = urllib.parse.parse_qs(self.rfile.read(length).decode('utf-8'), keep_blank_values=True)
-        get = lambda name, default='': form.get(name, [default])[0]
-        action = get('action')
-        if action == 'scan':
-            run_now.set()
-            message = 'Проверка запущена. Обнови страницу статуса через несколько секунд.'
-        elif action == 'test':
-            try:
-                parsed = extract(get('sample'), settings())
-                message = json.dumps(parsed, ensure_ascii=False, indent=2) if parsed else 'Нужные реквизиты не обнаружены'
-            except re.error as exc:
-                message = f'Ошибка регулярного выражения: {exc}'
-        elif action == 'save':
-            opts = settings()
-            try:
-                for key, _label in INPUTS:
-                    value = get(key)
-                    if key == 'api_token' and not value:
-                        continue
-                    if key in ('poll_seconds', 'scan_documents', 'amount_field_id', 'iban_field_id', 'purpose_field_id'):
-                        value = int(value)
-                    opts[key] = value
-                if not 10 <= opts['poll_seconds'] <= 3600 or not 1 <= opts['scan_documents'] <= 1000:
-                    raise ValueError('Неверный интервал или размер выборки')
-                if any(opts[key] < 1 for key in ('amount_field_id', 'iban_field_id', 'purpose_field_id')):
-                    raise ValueError('ID полей должны быть положительными')
-                if len({opts[k] for k in ('amount_field_id', 'iban_field_id', 'purpose_field_id')}) != 3:
-                    raise ValueError('ID пользовательских полей должны различаться')
-                for key in ('beneficiary_regex', 'amount_regex', 'iban_regex', 'purpose_regex'):
-                    if re.compile(opts[key]).groups < 1:
-                        raise ValueError('Шаблон должен содержать захватывающую группу: ' + key)
-                opts['amount_format'] = get('amount_format')
-                if opts['amount_format'] not in ('monetary', 'number', 'text'):
-                    raise ValueError('Недопустимый формат суммы')
-                opts['dry_run'] = get('dry_run') == 'yes'
-                Paperless(opts['paperless_url'], opts['api_token'])
-                write_json(SETTINGS_FILE, opts)
-                run_now.set()
-                message = 'Настройки сохранены.'
-            except (ValueError, re.error) as exc:
-                message = 'Не удалось сохранить: ' + str(exc)
-        else:
-            self.send_error(400)
-            return
-        self.send_html('<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><body style="font:16px system-ui;padding:24px"><pre>' + html.escape(message) + '</pre><a href="./">Вернуться к настройкам</a></body></html>')
-
-    def log_message(self, format, *args):
-        LOG.debug(format, *args)
+from rule_web import make_handler
+Handler = make_handler(settings, status, lock, run_now, Paperless, write_json, SETTINGS_FILE)
 
 
 def main():

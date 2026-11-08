@@ -1,40 +1,78 @@
-# ImmortalSerg Home Assistant Add-ons
+# ImmortalSerg Home Assistant Apps
 
-One repository URL for my Home Assistant add-ons:
+**Единый каталог приложений Home Assistant:**
 
-`https://github.com/immortalserg/paperless-plugin`
+https://github.com/immortalserg/ha-apps
 
-## Add-ons
+## Приложения
 
-- **FinWorkspace** — self-hosted finance manager (original source: [FinWorkspace-HA](https://github.com/immortalserg/FinWorkspace-HA)). This catalog duplicates its add-on files so it can be installed from this single repository.
-- **Paperless Auto Metadata** — automatically extract beneficiary, amount, IBAN and communication from OCR receipts into Paperless-ngx using its REST API.
+- **FinWorkspace** — self-hosted finance manager, синхронизируемый с [FinWorkspace-HA](https://github.com/immortalserg/FinWorkspace-HA).
+- **Paperless Auto Metadata** — универсальный обработчик OCR-текста для Paperless-ngx с собственным веб-конструктором правил.
 
-### Paperless configuration and web interface
+## Как подключить каталог
 
-Add the repository in **Home Assistant → Settings → Add-ons → Add-on Store → ⋮ → Repositories**, then install **Paperless Auto Metadata**. Start it and click **Open Web UI** to edit the connection, field IDs, regex patterns, scan interval and dry-run mode. Changes are stored in the add-on's `/data/settings.json` and persist across restarts. The same basic settings are available on the Home Assistant add-on **Configuration** tab; values saved in the web UI take precedence.
+Home Assistant → Settings → Apps → App Store → ⋮ → Repositories → добавить:
 
-Defaults:
+```text
+https://github.com/immortalserg/ha-apps
+```
 
-| Source OCR label | Paperless field |
-| --- | --- |
-| Bénéficiaire | Correspondent (create if missing) |
-| Montant | Custom field ID 2 (monetary, `EUR190.30`) |
-| IBAN | Custom field ID 3 (text) |
-| Communication | Custom field ID 4 (text) |
-| Communication | Title: `оплата ` + value |
+Установи **Paperless Auto Metadata**, затем запусти его и нажми **Open Web UI**.
 
-- `dry_run` is **true** on first install: test a document before permitting any changes.
-- The API token is never displayed after saving it in the web UI. Do not commit tokens to GitHub.
-- New documents are checked every 30 seconds by default. Only up to 100 newest documents are scanned per poll (editable).
-- Existing custom fields are preserved; unmatched documents are not changed.
-- Records are cached in `/data/processed.json`; OCR changes and configuration changes trigger reprocessing.
-- Built-in web interface uses **Home Assistant ingress** (no externally exposed web port).
-- This processes only documents matching all four expected bank labels. It does **not** require modifying the Paperless-ngx container.
+### Настройка через веб-интерфейс
 
-### Important for existing FinWorkspace users
+1. Укажи URL Paperless-ngx и API-токен из профиля пользователя Paperless.
+2. Сохрани подключение и открой веб-интерфейс снова: имена пользовательских полей подгрузятся через API.
+3. Создавай, изменяй или удаляй **любое количество правил**. Каждое правило содержит:
+   - **Название** (произвольное описание).
+   - **Регулярное выражение**: извлекаемое значение должно быть в первой группе `(...)`.
+   - **Назначение**: *пользовательское поле*, *корреспондент* или *название документа*.
+   - **Поле Paperless**: выбор по названию и ID, либо ввод ID вручную при недоступности API.
+   - **Преобразование**: как есть, верхний/нижний регистр, удаление пробелов, число или денежное значение.
+   - **Префикс** и трёхбуквенный код **валюты** для денежных значений.
+   - **Включено** и **Обязательно**.
+4. Вставь OCR-текст документа и нажми **Проверить выражения**. Это проверяет даже ещё не сохранённые правила, не меняя документ.
+5. Нажми **Сохранить настройки**.
+6. Отключай **Тестовый режим** только после проверки результатов.
 
-Home Assistant derives add-on identity from the **repository URL**, not merely the add-on `slug`. FinWorkspace from this catalog will appear as a **different add-on** from the existing `FinWorkspace-HA` installation. **Do not uninstall or replace the existing FinWorkspace add-on without a database backup and migration plan.** You may keep the old add-on installed while using this common catalog for new installations.
+Настройки сохраняются в `/data/settings.json` внутри приложения и переживают перезапуски. Токен не отображается повторно после сохранения. Не добавляй токены в GitHub.
 
-## Development
+### Пример готовых банковских правил
 
-Run `python3 -m unittest discover -s tests -v` from the repository root.
+| Поиск по OCR | Назначение | Преобразование |
+| --- | --- | --- |
+| Bénéficiaire | Корреспондент (найти или создать) | Текст |
+| Montant | Поле ID 2 | Денежное: `EUR190.30` |
+| IBAN | Поле ID 3 | Убрать пробелы, верхний регистр |
+| Communication | Поле ID 4 | Текст |
+| Communication | Название документа | Префикс `оплата ` |
+
+Это **лишь начальные значения**. Пользователь может полностью изменить регулярные выражения и назначения, в том числе создать правила под любые другие документы.
+
+Если обязательное правило не совпадает, документ не изменяется. Необязательные правила могут не находить значение.
+
+### Работа и безопасность
+
+- Проверка новых документов через API с интервалом 30 секунд (настраивается).
+- Повторная обработка после изменения OCR-текста или настроек правил.
+- Сохранение всех ранее установленных пользовательских полей документа.
+- Тестовый режим включён при первом запуске.
+- Веб-интерфейс работает через Home Assistant **Ingress** без публикации собственного порта наружу.
+- Для безопасности доступ к веб-серверу приложения разрешён только через стандартный Ingress-прокси Home Assistant.
+- Приложение не изменяет контейнер Paperless-ngx.
+- Логи могут содержать извлечённые значения документов в тестовом режиме: береги журналы.
+- Выражения `re` Python вводит доверенный администратор; не запускай непроверенные потенциально тяжёлые выражения.
+
+### Обновление с v1.1.x
+
+Существующие базовые настройки соединения и токен сохраняются. Начиная с v1.2.0 правила хранятся в массиве `rules`; предустановленный набор соответствует прошлому поведению. Пользовательские выражения из старого интерфейса следует проверить и при необходимости повторно задать в новом конструкторе.
+
+### FinWorkspace
+
+Старая установленная копия FinWorkspace из [FinWorkspace-HA](https://github.com/immortalserg/FinWorkspace-HA) не должна удаляться автоматически: Home Assistant присваивает приложению идентификатор с учётом репозитория. Перенос базы данных требует отдельной резервной копии и плана миграции.
+
+## Разработка
+
+```bash
+python3 -m unittest discover -s tests -v
+```

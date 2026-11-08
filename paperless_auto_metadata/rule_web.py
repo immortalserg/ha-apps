@@ -68,6 +68,11 @@ document.querySelector('[name=ui_language]').addEventListener('change',applyLang
 """
 
 
+def is_long_text_field(field):
+    """Paperless-ngx API uses 'longtext' for its Long Text custom field."""
+    return field.get('data_type') == 'longtext'
+
+
 def esc(value):
     return html.escape(str(value), quote=True)
 
@@ -176,7 +181,7 @@ def read_settings_form(form, old, paperless_class):
             raise ValueError('Выбери пользовательское поле для перевода')
         client = paperless_class(opts['paperless_url'], opts['api_token'])
         field_info = client.request('GET', f"/api/custom_fields/{opts['translate_field_id']}/")
-        if field_info.get('data_type') != 'longtext':
+        if not is_long_text_field(field_info):
             raise ValueError('Для перевода необходимо выбрать поле типа «Длинный текст»')
         if not 1 <= opts['translate_max_chars'] <= 50000:
             raise ValueError('Размер перевода: от 1 до 50000 символов')

@@ -1,0 +1,30 @@
+name: Test Paperless Auto Metadata
+on:
+  push:
+    paths:
+      - 'paperless_auto_metadata/**'
+      - 'tests/**'
+      - '.github/workflows/tests.yml'
+  pull_request:
+  workflow_dispatch:
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Unit tests
+        run: python -m unittest discover -s tests -v
+      - name: Validate add-on configuration
+        run: |
+          python -m pip install pyyaml
+          python - <<'PY'
+          import yaml
+          from pathlib import Path
+          for p in (Path('repository.yaml'), Path('paperless_auto_metadata/config.yaml'), Path('finworkspace/config.yaml')):
+              obj = yaml.safe_load(p.read_text())
+              assert isinstance(obj, dict) and obj
+              print('OK:', p)
+          PY

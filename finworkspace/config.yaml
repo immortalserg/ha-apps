@@ -1,0 +1,23 @@
+name: FinWorkspace
+version: "1.1.7"
+slug: finworkspace
+description: Self-hosted personal finance and investment workspace
+url: https://github.com/immortalserg/FinWorkspace
+arch:
+  - amd64
+  - aarch64
+startup: application
+boot: auto
+init: false
+image: ghcr.io/immortalserg/finworkspace-ha
+ports:
+  8223/tcp: 8223
+webui: "http://[HOST]:[PORT:8223]"
+options:
+  initial_admin_email: ""
+  initial_admin_name: ""
+  initial_admin_password: ""
+schema:
+  initial_admin_email: str
+  initial_admin_name: str
+  initial_admin_password: password

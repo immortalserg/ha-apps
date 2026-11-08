@@ -168,6 +168,10 @@ def read_settings_form(form, old, paperless_class):
             raise ValueError('Укажи адрес сервера LibreTranslate')
         if opts['translate_field_id'] < 1:
             raise ValueError('Выбери пользовательское поле для перевода')
+        client = paperless_class(opts['paperless_url'], opts['api_token'])
+        field_info = client.request('GET', f"/api/custom_fields/{opts['translate_field_id']}/")
+        if field_info.get('data_type') != 'long_text':
+            raise ValueError('Для перевода необходимо выбрать поле типа «Длинный текст»')
         if not 1 <= opts['translate_max_chars'] <= 50000:
             raise ValueError('Размер перевода: от 1 до 50000 символов')
         if not opts['translate_source'] or not opts['translate_target']:
@@ -247,8 +251,9 @@ def make_handler(settings, status, lock, run_now, paperless_class, write_json, s
                     (int(field['id']), field['name'] + ' (ID ' + str(field['id']) + ')')
                     for field in text_fields]
                 # Keep old configuration visible, but do not allow a non-long-text field.
+                # An obsolete short-text selection must be replaced with a long-text field.
                 if translation_field_id and translation_field_id not in [v for v,_ in field_options]:
-                    field_options.append((translation_field_id, 'ID ' + str(translation_field_id) + ' (недоступно: не «Длинный текст»)'))
+                    field_options.insert(0, (translation_field_id, 'ID ' + str(translation_field_id) + ' (устаревшее поле; выбери «Длинный текст»)'))
                 translate_field = select('translate_field_id', translation_field_id, field_options)
             else:
                 translate_field = ('<input type="number" min="0" name="translate_field_id" value="' +

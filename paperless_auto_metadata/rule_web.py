@@ -41,6 +41,7 @@ SCRIPT = """
 const rules=document.getElementById('rules');
 document.getElementById('add-rule').addEventListener('click',()=>{
 rules.appendChild(document.getElementById('new-rule').content.cloneNode(true));
+applyLanguage();
 });
 rules.addEventListener('click',(event)=>{
 if(event.target.matches('[data-delete]'))event.target.closest('.rule').remove();
@@ -57,7 +58,7 @@ labels["Проверять каждые N секунд"]={en:"Check every N seco
 labels["Сколько последних документов проверять"]={en:"Number of recent documents",fr:"Nombre de documents récents",de:"Anzahl aktueller Dokumente"};
 labels["Валюта для денежного поля"]={en:"Currency for monetary field",fr:"Devise du champ monétaire",de:"Währung des Geldfelds"};
 labels["Регулярное выражение (первая группа в скобках — извлекаемое значение)"]={en:"Regex (first capture group is extracted)",fr:"Regex (premier groupe capturé extrait)",de:"Regex (erste Gruppe wird extrahiert)"};
-function applyLanguage(){const lang=document.querySelector('[name=ui_language]').value;document.documentElement.lang=lang;const w=document.createTreeWalker(document.querySelector('main'),NodeFilter.SHOW_TEXT);while(w.nextNode()){const n=w.currentNode,k=n.textContent.trim();if(labels[k]){if(!n.__original)n.__original=k;n.textContent=labels[n.__original]?.[lang]||n.__original;}else if(n.__original){n.textContent=labels[n.__original]?.[lang]||n.__original;}}}
+function applyLanguage(){const lang=document.querySelector('[name=ui_language]').value;document.documentElement.lang=lang;const w=document.createTreeWalker(document.querySelector('main'),NodeFilter.SHOW_TEXT);while(w.nextNode()){const n=w.currentNode,k=n.textContent.trim();if(labels[k]&&!n.__original)n.__original=k;if(n.__original)n.textContent=labels[n.__original]?.[lang]||n.__original;}}
 document.querySelector('[name=ui_language]').addEventListener('change',applyLanguage);applyLanguage();
 """
 

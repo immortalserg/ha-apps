@@ -136,12 +136,20 @@ class Paperless:
         return self.request('GET', f'/api/documents/{int(document_id)}/')
 
     def correspondent(self, name):
-        # Search is advisory: always compare exact names to avoid near-match assignment.
-        path = '/api/correspondents/?' + urllib.parse.urlencode({'name__icontains': name, 'page_size': 100})
-        for item in self.pages(path):
-            if item.get('name', '').strip().casefold() == name.strip().casefold():
-                return item['id']
-        return self.request('POST', '/api/correspondents/', {'name': name})['id']
+        name = str(name).strip()
+        if not name:
+            raise ValueError('Correspondent name cannot be empty')
+        # Search all correspondents to avoid a filtered search missing an exact
+        # match due to server-side filtering or pagination.
+        for item in self.pages('/api/correspondents/?page_size=100'):
+            if str(item.get('name', '')).strip().casefold() == name.casefold():
+                return int(item['id'])
+        # A new correspondent must be created before assigning it to a document.
+        created = self.request('POST', '/api/correspondents/', {'name': name})
+        if not created or 'id' not in created:
+            raise ValueError('Paperless did not return an ID for the new correspondent')
+        LOG.info('Created correspondent %s (ID %s)', name, created['id'])
+        return int(created['id'])
 
 
 def process(client, doc, opts):

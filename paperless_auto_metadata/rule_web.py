@@ -136,6 +136,10 @@ def read_settings_form(form, old, paperless_class):
     opts['translate_target'] = form.get('translate_target', ['ru'])[0].strip()
     opts['translate_field_id'] = int(form.get('translate_field_id', ['0'])[0] or 0)
     opts['translate_max_chars'] = int(form.get('translate_max_chars', ['12000'])[0])
+    opts['translate_tag_ids'] = sorted({int(x) for x in form.get('translate_tag_ids', []) if x.strip()})
+    opts['translate_tag_match'] = form.get('translate_tag_match', ['any'])[0]
+    if opts['translate_tag_match'] not in ('any', 'all') or any(x <= 0 for x in opts['translate_tag_ids']):
+        raise ValueError('Некорректные условия выбора тегов')
     new_key = form.get('translate_api_key', [''])[0]
     if new_key:
         opts['translate_api_key'] = new_key
@@ -177,10 +181,15 @@ def make_handler(settings, status, lock, run_now, paperless_class, write_json, s
         def page(self, message='', sample='', preview=None, candidate=None):
             opts = candidate if candidate is not None else settings()
             fields, field_error = [], ''
+            tags, tag_error = [], ''
             if opts.get('api_token'):
                 try:
                     paperless = paperless_class(opts['paperless_url'], opts['api_token'])
                     fields = list(paperless.pages('/api/custom_fields/?page_size=100'))[:1000]
+                    try:
+                        tags = list(paperless.pages('/api/tags/?page_size=100'))[:1000]
+                    except (urllib.error.HTTPError, urllib.error.URLError, ValueError, KeyError) as error:
+                        tag_error = str(error)
                 except (urllib.error.HTTPError, urllib.error.URLError, ValueError, KeyError) as error:
                     field_error = str(error)
             inputs = []
@@ -197,6 +206,14 @@ def make_handler(settings, status, lock, run_now, paperless_class, write_json, s
             if field_error:
                 notice += '<p class="notice">Не удалось загрузить список полей: ' + esc(field_error) + (
                     '. Укажи ID поля вручную.</p>')
+            if tag_error:
+                notice += '<p class="notice">Не удалось загрузить теги: ' + esc(tag_error) + '</p>'
+            selected_tags = {int(x) for x in opts.get('translate_tag_ids', [])}
+            tag_options = ''.join('<option value="' + esc(tag['id']) + '"' +
+                (' selected' if int(tag['id']) in selected_tags else '') + '>' +
+                esc(tag['name']) + '</option>' for tag in tags)
+            missing_tags = selected_tags - {int(t['id']) for t in tags}
+            tag_options += ''.join('<option value="' + str(tag_id) + '" selected>ID ' + str(tag_id) + '</option>' for tag_id in sorted(missing_tags))
             cards = ''.join(rule_card(rule, fields) for rule in opts.get('rules', DEFAULT_RULES))
             blank = rule_card({'label':'','pattern':'','target':'custom_field','field_id':0,
                                'transform':'text','prefix':'','currency':'EUR',
@@ -232,14 +249,16 @@ def make_handler(settings, status, lock, run_now, paperless_class, write_json, s
 <label><input style="display:inline;width:auto" name="dry_run" type="checkbox"
  value="1"{checked}> Тестовый режим: не изменять документы</label></section>
 <section><h2>Перевод OCR</h2>
-<p class="muted">Необязательная функция: переводит весь распознанный текст через LibreTranslate
-и сохраняет перевод в выбранное текстовое пользовательское поле Paperless.</p>
+<p class="muted">Перевод запускается только для документов с пустым целевым полем. Можно дополнительно ограничить документы тегами Paperless. Заполненные поля никогда не перезаписываются.</p>
 <label><input style="display:inline;width:auto" type="checkbox" name="translate_enabled"
  value="1"{tr_checked}> Включить перевод</label>
 <div class="row">
 <label>Адрес LibreTranslate<input type="url" name="translate_url"
  placeholder="http://libretranslate:5000" value="{esc(opts.get('translate_url',''))}"></label>
 <label>Поле Paperless для перевода{translate_field}</label>
+<label>Теги для перевода (необязательно; Ctrl/⌘ для выбора нескольких)
+<select name="translate_tag_ids" multiple size="5">{tag_options}</select></label>
+<label>Условие для выбранных тегов{select('translate_tag_match', opts.get('translate_tag_match','any'), [('any','Любой из тегов (ИЛИ)'),('all','Все выбранные теги (И)')])}</label>
 <label>Язык оригинала (auto)<input name="translate_source" value="{esc(opts.get('translate_source','auto'))}"></label>
 <label>Язык перевода (ru, en, fr, de...)<input name="translate_target"
  value="{esc(opts.get('translate_target','ru'))}"></label>
@@ -248,6 +267,7 @@ def make_handler(settings, status, lock, run_now, paperless_class, write_json, s
 <label>API-ключ LibreTranslate (необязательно)<input type="password" name="translate_api_key"
  autocomplete="new-password" placeholder="Оставь пустым, чтобы сохранить"></label>
 </div>
+<p class="muted">Если теги не выбраны, переводятся документы с пустым полем. Если теги выбраны, переводятся только документы с пустым полем и соответствующими тегами.</p>
 </section>
 <section><h2>Правила</h2>
 <p class="muted">По умолчанию правил нет. Добавляй любые регулярные выражения и выбирай назначение.

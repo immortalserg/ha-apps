@@ -4,25 +4,7 @@ from decimal import Decimal, InvalidOperation
 
 TARGETS = {"custom_field", "title", "correspondent"}
 TRANSFORMS = {"text", "uppercase", "lowercase", "compact", "decimal", "monetary"}
-DEFAULT_RULES = [
-    {"name": "beneficiary", "label": "Bénéficiaire", "enabled": True, "required": True,
-     "pattern": r"^\s*B[ée]n[ée]ficiaire\s*:\s*([^\r\n]+)", "target": "correspondent",
-     "field_id": 0, "transform": "text", "prefix": "", "currency": "EUR"},
-    {"name": "amount", "label": "Montant", "enabled": True, "required": True,
-     "pattern": r"^\s*Montant\s*:\s*([\d\s\u00a0\u202f.,]+)\s*EUR\b",
-     "target": "custom_field", "field_id": 2, "transform": "monetary",
-     "prefix": "", "currency": "EUR"},
-    {"name": "iban", "label": "IBAN", "enabled": True, "required": True,
-     "pattern": r"^\s*IBAN\s*:?\s*(LU(?:[ \t]*[A-Z0-9]){18})\b",
-     "target": "custom_field", "field_id": 3, "transform": "compact",
-     "prefix": "", "currency": "EUR"},
-    {"name": "purpose", "label": "Communication", "enabled": True, "required": True,
-     "pattern": r"^\s*Communication\s*:\s*([^\r\n]+)", "target": "custom_field",
-     "field_id": 4, "transform": "text", "prefix": "", "currency": "EUR"},
-    {"name": "title", "label": "Document title", "enabled": True, "required": True,
-     "pattern": r"^\s*Communication\s*:\s*([^\r\n]+)", "target": "title",
-     "field_id": 0, "transform": "text", "prefix": "оплата ", "currency": "EUR"},
-]
+DEFAULT_RULES = []
 
 
 def validate_rules(rules):
@@ -65,8 +47,6 @@ def validate_rules(rules):
         result.append(dict(name=name, label=label, pattern=pattern, target=target,
                            field_id=field_id, transform=transform, prefix=prefix,
                            currency=currency, enabled=enabled, required=required))
-    if not any(rule["enabled"] for rule in result):
-        raise ValueError("Enable at least one rule")
     return result
 
 

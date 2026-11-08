@@ -20,10 +20,11 @@ class Tests(unittest.TestCase):
             def request(self,method,path,payload): self.payload=payload
         client=Client()
         opts=dict(DEFAULTS,translate_enabled=True,translate_url='http://localhost:5000',
-                  translate_field_id=67,translate_target='en',dry_run=False)
+                  translate_field_id=67,translate_target='en',dry_run=False,
+                  translate_tag_ids=[4])
         with patch('translation.urllib.request.urlopen',return_value=Response()) as request:
             result=process(client,{'id':1,'content':'Bonjour le monde',
-                'custom_fields':[{'field':8,'value':'keep'}]},opts)
+                'custom_fields':[{'field':8,'value':'keep'}], 'tags':[4]},opts)
         self.assertEqual(result,'updated')
         self.assertEqual({x['field']:x['value'] for x in client.payload['custom_fields']},
                          {8:'keep',67:'Hello world'})
@@ -61,6 +62,37 @@ class Tests(unittest.TestCase):
             self.assertEqual(process(None,{'id':1,'content':'Bonjour',
                 'custom_fields':[], 'tags':[5]},opts),'dry_run')
             request.assert_called_once()
+
+    def test_present_empty_field_triggers_without_tags(self):
+        opts=dict(DEFAULTS,translate_enabled=True,translate_url='http://localhost:5000',
+                  translate_field_id=67,translate_trigger='tag_or_field')
+        class Response:
+            def __enter__(self): return self
+            def __exit__(self,*args): pass
+            def read(self): return b'{"translatedText":"Hello"}'
+        with patch('translation.urllib.request.urlopen',return_value=Response()) as request:
+            self.assertEqual(process(None,{'id':1,'content':'Bonjour',
+                'custom_fields':[{'field':67,'value':''}],'tags':[]},opts),'dry_run')
+            request.assert_called_once()
+
+    def test_absent_field_without_tags_is_skipped(self):
+        opts=dict(DEFAULTS,translate_enabled=True,translate_url='http://localhost:5000',
+                  translate_field_id=67,translate_trigger='tag_or_field')
+        with patch('translation.urllib.request.urlopen') as request:
+            self.assertEqual(process(None,{'id':1,'content':'Bonjour',
+                'custom_fields':[],'tags':[]},opts),'skipped')
+            request.assert_not_called()
+
+    def test_tag_triggers_even_if_field_absent(self):
+        opts=dict(DEFAULTS,translate_enabled=True,translate_url='http://localhost:5000',
+                  translate_field_id=67,translate_tag_ids=[4],translate_trigger='tag_or_field')
+        class Response:
+            def __enter__(self): return self
+            def __exit__(self,*args): pass
+            def read(self): return b'{"translatedText":"Hello"}'
+        with patch('translation.urllib.request.urlopen',return_value=Response()):
+            self.assertEqual(process(None,{'id':1,'content':'Bonjour',
+                'custom_fields':[],'tags':[4]},opts),'dry_run')
 
     def test_invalid_field(self):
         with self.assertRaises(ValueError):

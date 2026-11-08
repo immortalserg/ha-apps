@@ -32,6 +32,7 @@ DEFAULTS = {
     'translate_target': 'ru', 'translate_field_id': 0,
     'translate_max_chars': 12000,
     'translate_tag_ids': [], 'translate_tag_match': 'any',
+    'translate_trigger': 'tag_or_field', 'ui_language': 'ru',
 }
 
 lock = threading.RLock()
@@ -150,11 +151,17 @@ def process(client, doc, opts):
         existing = custom_before.get(field_id)
         # Never overwrite an existing translation, even if tag filters match.
         field_empty = existing is None or (isinstance(existing, str) and not existing.strip())
+        field_present = field_id in custom_before
         tags = set(int(t) for t in (doc.get('tags') or []))
         selected = set(int(t) for t in opts.get('translate_tag_ids', []))
         match_mode = opts.get('translate_tag_match', 'any')
         tag_match = not selected or (selected <= tags if match_mode == 'all' else bool(selected & tags))
-        if field_empty and tag_match:
+        trigger = opts.get('translate_trigger', 'tag_or_field')
+        tag_trigger = bool(selected) and tag_match
+        field_trigger = field_present and field_empty
+        eligible = ((tag_trigger or field_trigger) if trigger == 'tag_or_field' else
+                    tag_trigger if trigger == 'tag_only' else field_trigger)
+        if field_empty and eligible:
             translation = translate_text(doc.get('content') or '', opts)
     if matches is None and translation is None:
         return 'skipped'
@@ -212,7 +219,7 @@ def scan_once():
                 counts['skipped'] += 1
                 LOG.info('Document #%s has no OCR content yet; will retry', doc_id)
                 continue
-            fingerprint = hashlib.sha256(('v1.4-detail:' + opts_fingerprint + json.dumps({'content': content, 'tags': doc.get('tags'), 'custom_fields': doc.get('custom_fields')}, sort_keys=True, ensure_ascii=False)).encode()).hexdigest()
+            fingerprint = hashlib.sha256(('v1.5-detail:' + opts_fingerprint + json.dumps({'content': content, 'tags': doc.get('tags'), 'custom_fields': doc.get('custom_fields')}, sort_keys=True, ensure_ascii=False)).encode()).hexdigest()
             if state.get(doc_id) == fingerprint:
                 continue
             outcome = process(client, doc, opts)

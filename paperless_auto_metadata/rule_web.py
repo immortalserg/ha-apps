@@ -41,10 +41,30 @@ SCRIPT = """
 const rules=document.getElementById('rules');
 document.getElementById('add-rule').addEventListener('click',()=>{
 rules.appendChild(document.getElementById('new-rule').content.cloneNode(true));
+applyLanguage();
 });
 rules.addEventListener('click',(event)=>{
 if(event.target.matches('[data-delete]'))event.target.closest('.rule').remove();
 });
+
+const labels={"Статус":{"en":"Status","fr":"Statut","de":"Status"},"Подключение":{"en":"Connection","fr":"Connexion","de":"Verbindung"},"Перевод OCR":{"en":"OCR translation","fr":"Traduction OCR","de":"OCR-Übersetzung"},"Правила":{"en":"Rules","fr":"Règles","de":"Regeln"},"Проверить OCR-текст":{"en":"Test OCR text","fr":"Tester le texte OCR","de":"OCR-Text prüfen"},"Включить перевод":{"en":"Enable translation","fr":"Activer la traduction","de":"Übersetzung aktivieren"},"Язык интерфейса":{"en":"Interface language","fr":"Langue de l’interface","de":"Sprache der Oberfläche"},"Запуск перевода":{"en":"Translation trigger","fr":"Déclencheur","de":"Übersetzungsauslöser"},"Теги ИЛИ пустое поле":{"en":"Tags OR empty field","fr":"Tags OU champ vide","de":"Tags ODER leeres Feld"},"Только теги":{"en":"Tags only","fr":"Tags uniquement","de":"Nur Tags"},"Только пустое поле":{"en":"Empty field only","fr":"Champ vide uniquement","de":"Nur leeres Feld"},"Поле Paperless для перевода":{"en":"Translation field","fr":"Champ de traduction","de":"Übersetzungsfeld"},"Адрес LibreTranslate":{"en":"LibreTranslate URL","fr":"Adresse LibreTranslate","de":"LibreTranslate-Adresse"},"Условие для выбранных тегов":{"en":"Tag matching","fr":"Correspondance des tags","de":"Tag-Abgleich"},"Любой из тегов (ИЛИ)":{"en":"Any tag (OR)","fr":"Un tag (OU)","de":"Beliebiger Tag (ODER)"},"Все выбранные теги (И)":{"en":"All tags (AND)","fr":"Tous les tags (ET)","de":"Alle Tags (UND)"},"Максимум символов":{"en":"Maximum characters","fr":"Maximum de caractères","de":"Maximale Zeichen"},"Язык оригинала (auto)":{"en":"Source language (auto)","fr":"Langue source (auto)","de":"Ausgangssprache (auto)"},"Язык перевода (ru, en, fr, de...)":{"en":"Target language","fr":"Langue cible","de":"Zielsprache"},"Проверить документы сейчас":{"en":"Scan now","fr":"Vérifier maintenant","de":"Jetzt prüfen"},"Сохранить настройки":{"en":"Save settings","fr":"Enregistrer","de":"Speichern"},"Проверить выражения":{"en":"Test rules","fr":"Tester les règles","de":"Regeln prüfen"},"+ Добавить правило":{"en":"+ Add rule","fr":"+ Ajouter une règle","de":"+ Regel hinzufügen"},"Удалить":{"en":"Delete","fr":"Supprimer","de":"Löschen"},"Название правила":{"en":"Rule name","fr":"Nom de la règle","de":"Regelname"},"Включено":{"en":"Enabled","fr":"Activé","de":"Aktiviert"},"Обязательно":{"en":"Required","fr":"Obligatoire","de":"Erforderlich"},"Назначение":{"en":"Destination","fr":"Destination","de":"Ziel"},"Поле Paperless":{"en":"Paperless field","fr":"Champ Paperless","de":"Paperless-Feld"},"Преобразование":{"en":"Transform","fr":"Transformation","de":"Umwandlung"},"Префикс":{"en":"Prefix","fr":"Préfixe","de":"Präfix"},"Да":{"en":"Yes","fr":"Oui","de":"Ja"},"Нет":{"en":"No","fr":"Non","de":"Nein"},"Пользовательское поле":{"en":"Custom field","fr":"Champ personnalisé","de":"Benutzerdefiniertes Feld"},"Корреспондент":{"en":"Correspondent","fr":"Correspondant","de":"Korrespondent"},"Название документа":{"en":"Document title","fr":"Titre du document","de":"Dokumenttitel"},"— Выбери поле «Длинный текст» —":{"en":"— Select long-text field —","fr":"— Choisir texte long —","de":"— Langtextfeld auswählen —"}};
+labels["Язык оригинала"]={en:"Source language",fr:"Langue source",de:"Ausgangssprache"};
+labels["Язык перевода"]={en:"Target language",fr:"Langue cible",de:"Zielsprache"};
+labels["Тестовый режим: не изменять документы"]={en:"Dry run: do not modify documents",fr:"Mode test : ne pas modifier les documents",de:"Testmodus: Dokumente nicht ändern"};
+labels["Теги для перевода (необязательно; Ctrl/⌘ для выбора нескольких)"]={en:"Translation tags (optional; Ctrl/⌘ for multiple)",fr:"Tags de traduction (facultatif ; Ctrl/⌘ pour plusieurs)",de:"Übersetzungs-Tags (optional; Strg/⌘ für mehrere)"};
+labels["API-ключ LibreTranslate (необязательно)"]={en:"LibreTranslate API key (optional)",fr:"Clé API LibreTranslate (facultatif)",de:"LibreTranslate-API-Schlüssel (optional)"};
+labels["Адрес Paperless-ngx"]={en:"Paperless-ngx URL",fr:"Adresse Paperless-ngx",de:"Paperless-ngx-Adresse"};
+labels["Проверять каждые N секунд"]={en:"Check every N seconds",fr:"Vérifier toutes les N secondes",de:"Alle N Sekunden prüfen"};
+labels["Сколько последних документов проверять"]={en:"Number of recent documents",fr:"Nombre de documents récents",de:"Anzahl aktueller Dokumente"};
+labels["Валюта для денежного поля"]={en:"Currency for monetary field",fr:"Devise du champ monétaire",de:"Währung des Geldfelds"};
+labels["Регулярное выражение (первая группа в скобках — извлекаемое значение)"]={en:"Regex (first capture group is extracted)",fr:"Regex (premier groupe capturé extrait)",de:"Regex (erste Gruppe wird extrahiert)"};
+labels["Гибкие правила поиска в OCR и сопоставления с полями Paperless-ngx"]={en:"Flexible OCR rules and Paperless field mapping",fr:"Règles OCR et correspondance des champs Paperless",de:"Flexible OCR-Regeln und Paperless-Feldzuordnung"};
+labels["Перевод запускается по выбранным тегам ИЛИ при наличии пустого пользовательского поля «Длинный текст». Заполненные поля не перезаписываются."]={en:"Translate when a selected tag matches OR a long-text custom field is present and empty. Existing values are preserved.",fr:"Traduire si un tag correspond OU si un champ texte long existe et est vide. Les valeurs existantes sont préservées.",de:"Übersetzen, wenn ein Tag passt ODER ein vorhandenes Langtextfeld leer ist. Vorhandene Werte bleiben erhalten."};
+labels["Теги ИЛИ поле: перевод запускается, если совпал тег либо документ уже содержит пустое целевое поле. При выборе только тегов поле может отсутствовать. Заполненное поле всегда сохраняется."]={en:"Tags OR field: translate when a tag matches or the destination field exists and is empty. With tags only, the field may be absent. Filled fields are preserved.",fr:"Tags OU champ : traduire si un tag correspond ou si le champ cible existe et est vide. En mode tags seuls, le champ peut être absent. Les champs remplis sont préservés.",de:"Tags ODER Feld: übersetzen, wenn ein Tag passt oder das Zielfeld vorhanden und leer ist. Bei Nur-Tags darf das Feld fehlen. Gefüllte Felder bleiben erhalten."};
+labels["Можно проверить изменения до сохранения; данные Paperless не изменятся."]={en:"Test before saving; Paperless documents will not be changed.",fr:"Testez avant d’enregistrer ; les documents Paperless ne seront pas modifiés.",de:"Vor dem Speichern testen; Paperless-Dokumente werden nicht verändert."};
+labels["По умолчанию правил нет. Добавляй любые регулярные выражения и выбирай назначение. У каждого выражения должна быть захватывающая группа в круглых скобках. Если обязательное правило не совпало, документ пропускается."]={en:"No default rules. Add regex patterns and choose their destination. Each regex needs a capture group. Documents without a required match are skipped.",fr:"Aucune règle par défaut. Ajoutez des expressions régulières et choisissez leur destination. Chaque expression doit avoir un groupe capturant. Les documents sans correspondance obligatoire sont ignorés.",de:"Keine Standardregeln. Reguläre Ausdrücke und Ziel wählen. Jeder Ausdruck braucht eine Erfassungsgruppe. Dokumente ohne erforderlichen Treffer werden übersprungen."};
+function applyLanguage(){const lang=document.querySelector('[name=ui_language]').value;document.documentElement.lang=lang;const w=document.createTreeWalker(document.querySelector('main'),NodeFilter.SHOW_TEXT);while(w.nextNode()){const n=w.currentNode,k=n.textContent.trim().replace(/\\s+/g,' ');if(labels[k]&&!n.__original)n.__original=k;if(n.__original)n.textContent=labels[n.__original]?.[lang]||n.__original;}}
+document.querySelector('[name=ui_language]').addEventListener('change',applyLanguage);applyLanguage();
 """
 
 
@@ -140,6 +160,12 @@ def read_settings_form(form, old, paperless_class):
     opts['translate_tag_match'] = form.get('translate_tag_match', ['any'])[0]
     if opts['translate_tag_match'] not in ('any', 'all') or any(x <= 0 for x in opts['translate_tag_ids']):
         raise ValueError('Некорректные условия выбора тегов')
+    opts['translate_trigger'] = form.get('translate_trigger', ['tag_or_field'])[0]
+    opts['ui_language'] = form.get('ui_language', ['ru'])[0]
+    if opts['translate_trigger'] not in ('tag_or_field', 'tag_only', 'field_only'):
+        raise ValueError('Некорректное условие перевода')
+    if opts['ui_language'] not in ('ru', 'en', 'fr', 'de'):
+        raise ValueError('Некорректный язык интерфейса')
     new_key = form.get('translate_api_key', [''])[0]
     if new_key:
         opts['translate_api_key'] = new_key
@@ -148,6 +174,10 @@ def read_settings_form(form, old, paperless_class):
             raise ValueError('Укажи адрес сервера LibreTranslate')
         if opts['translate_field_id'] < 1:
             raise ValueError('Выбери пользовательское поле для перевода')
+        client = paperless_class(opts['paperless_url'], opts['api_token'])
+        field_info = client.request('GET', f"/api/custom_fields/{opts['translate_field_id']}/")
+        if field_info.get('data_type') != 'long_text':
+            raise ValueError('Для перевода необходимо выбрать поле типа «Длинный текст»')
         if not 1 <= opts['translate_max_chars'] <= 50000:
             raise ValueError('Размер перевода: от 1 до 50000 символов')
         if not opts['translate_source'] or not opts['translate_target']:
@@ -221,24 +251,29 @@ def make_handler(settings, status, lock, run_now, paperless_class, write_json, s
             checked = ' checked' if opts.get('dry_run', True) else ''
             tr_checked = ' checked' if opts.get('translate_enabled') else ''
             translation_field_id = int(opts.get('translate_field_id') or 0)
-            text_fields = [field for field in fields if field.get('data_type') in ('string', 'text')]
+            text_fields = [field for field in fields if field.get('data_type') == 'long_text']
             if fields:
-                field_options = [(0, '— Выбери текстовое поле —')] + [
+                field_options = [(0, '— Выбери поле «Длинный текст» —')] + [
                     (int(field['id']), field['name'] + ' (ID ' + str(field['id']) + ')')
                     for field in text_fields]
+                # Keep old configuration visible, but do not allow a non-long-text field.
+                # An obsolete short-text selection must be replaced with a long-text field.
                 if translation_field_id and translation_field_id not in [v for v,_ in field_options]:
-                    field_options.append((translation_field_id, 'ID ' + str(translation_field_id)))
+                    field_options.insert(0, (translation_field_id, 'ID ' + str(translation_field_id) + ' (устаревшее поле; выбери «Длинный текст»)'))
                 translate_field = select('translate_field_id', translation_field_id, field_options)
             else:
                 translate_field = ('<input type="number" min="0" name="translate_field_id" value="' +
                                    esc(translation_field_id) + '">')
+            source_options = select('translate_source', opts.get('translate_source','auto'), [('auto','Auto'),('ru','Русский'),('en','English'),('fr','Français'),('de','Deutsch')])
+            target_options = select('translate_target', opts.get('translate_target','ru'), [('ru','Русский'),('en','English'),('fr','Français'),('de','Deutsch')])
+            language_options = select('ui_language', opts.get('ui_language','ru'), [('ru','Русский'),('en','English'),('fr','Français'),('de','Deutsch')])
             preview_html = ('<h3>Результат проверки</h3><pre>' +
                             esc(json.dumps(preview,ensure_ascii=False,indent=2)) +
                             '</pre>') if preview is not None else ''
             self.send_html(f"""<!doctype html><html lang="ru"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Paperless Auto Metadata</title><style>{STYLES}</style></head><body><main>
-<h1>Paperless Auto Metadata</h1>
+<div class="row"><h1>Paperless Auto Metadata</h1><label>Язык интерфейса{language_options}</label></div>
 <p class="muted">Гибкие правила поиска в OCR и сопоставления с полями Paperless-ngx</p>
 {notice}
 <section><h2>Статус</h2><div class="metrics">{metrics}</div>
@@ -249,7 +284,7 @@ def make_handler(settings, status, lock, run_now, paperless_class, write_json, s
 <label><input style="display:inline;width:auto" name="dry_run" type="checkbox"
  value="1"{checked}> Тестовый режим: не изменять документы</label></section>
 <section><h2>Перевод OCR</h2>
-<p class="muted">Перевод запускается только для документов с пустым целевым полем. Можно дополнительно ограничить документы тегами Paperless. Заполненные поля никогда не перезаписываются.</p>
+<p class="muted">Перевод запускается по выбранным тегам ИЛИ при наличии пустого пользовательского поля «Длинный текст». Заполненные поля не перезаписываются.</p>
 <label><input style="display:inline;width:auto" type="checkbox" name="translate_enabled"
  value="1"{tr_checked}> Включить перевод</label>
 <div class="row">
@@ -259,15 +294,15 @@ def make_handler(settings, status, lock, run_now, paperless_class, write_json, s
 <label>Теги для перевода (необязательно; Ctrl/⌘ для выбора нескольких)
 <select name="translate_tag_ids" multiple size="5">{tag_options}</select></label>
 <label>Условие для выбранных тегов{select('translate_tag_match', opts.get('translate_tag_match','any'), [('any','Любой из тегов (ИЛИ)'),('all','Все выбранные теги (И)')])}</label>
-<label>Язык оригинала (auto)<input name="translate_source" value="{esc(opts.get('translate_source','auto'))}"></label>
-<label>Язык перевода (ru, en, fr, de...)<input name="translate_target"
- value="{esc(opts.get('translate_target','ru'))}"></label>
+<label>Запуск перевода{select('translate_trigger', opts.get('translate_trigger','tag_or_field'), [('tag_or_field','Теги ИЛИ пустое поле'),('tag_only','Только теги'),('field_only','Только пустое поле')])}</label>
+<label>Язык оригинала{source_options}</label>
+<label>Язык перевода{target_options}</label>
 <label>Максимум символов<input type="number" name="translate_max_chars" min="1" max="50000"
  value="{esc(opts.get('translate_max_chars',12000))}"></label>
 <label>API-ключ LibreTranslate (необязательно)<input type="password" name="translate_api_key"
  autocomplete="new-password" placeholder="Оставь пустым, чтобы сохранить"></label>
 </div>
-<p class="muted">Если теги не выбраны, переводятся документы с пустым полем. Если теги выбраны, переводятся только документы с пустым полем и соответствующими тегами.</p>
+<p class="muted">Теги ИЛИ поле: перевод запускается, если совпал тег либо документ уже содержит пустое целевое поле. При выборе только тегов поле может отсутствовать. Заполненное поле всегда сохраняется.</p>
 </section>
 <section><h2>Правила</h2>
 <p class="muted">По умолчанию правил нет. Добавляй любые регулярные выражения и выбирай назначение.

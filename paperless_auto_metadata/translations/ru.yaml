@@ -1,0 +1,21 @@
+configuration:
+  paperless_url:
+    name: Адрес Paperless-ngx
+  api_token:
+    name: Токен API Paperless
+  poll_seconds:
+    name: Период проверки (секунды)
+  scan_documents:
+    name: Сколько последних документов проверять
+  amount_field_id:
+    name: ID поля «Сумма документа»
+  iban_field_id:
+    name: ID поля «IBAN корреспондента»
+  purpose_field_id:
+    name: ID поля «Назначение»
+  amount_format:
+    name: Формат суммы
+  title_prefix:
+    name: Префикс названия документа
+  dry_run:
+    name: Тестовый режим (ничего не изменять)

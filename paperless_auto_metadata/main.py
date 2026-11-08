@@ -46,13 +46,24 @@ def read_json(path, fallback):
         return fallback
 
 
+def is_legacy_bank_rules(rules):
+    if not isinstance(rules, list) or len(rules) != 5:
+        return False
+    return ([r.get('name') for r in rules] ==
+            ['beneficiary', 'amount', 'iban', 'purpose', 'title'] and
+            [r.get('target') for r in rules] ==
+            ['correspondent', 'custom_field', 'custom_field', 'custom_field', 'title'] and
+            [r.get('field_id') for r in rules] == [0, 2, 3, 4, 0] and
+            all(r.get('required') and r.get('enabled') for r in rules))
+
+
 def settings():
     data = dict(DEFAULTS)
     data.update({k: v for k, v in read_json(OPTIONS_FILE, {}).items() if k in data})
     data.update({k: v for k, v in read_json(SETTINGS_FILE, {}).items() if k in data})
     # Remove the old built-in bank-specific rules when upgrading.
     # Preserve rules explicitly customized by the user.
-    if data.get('rules') == DEFAULT_RULES:
+    if is_legacy_bank_rules(data.get('rules')):
         data['rules'] = []
     return data
 
@@ -63,7 +74,7 @@ def save_settings(data):
 
 def migrate_settings():
     existing = read_json(SETTINGS_FILE, {})
-    if existing.get('rules') == DEFAULT_RULES:
+    if is_legacy_bank_rules(existing.get('rules')):
         existing['rules'] = []
         write_json(SETTINGS_FILE, existing)
 

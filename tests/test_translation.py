@@ -14,6 +14,25 @@ class Tests(unittest.TestCase):
         self.assertFalse(is_long_text_field({'id': 2, 'data_type': 'string'}))
         self.assertFalse(is_long_text_field({'id': 3, 'data_type': 'long_text'}))
 
+    def test_rules_mode_does_not_translate(self):
+        opts = dict(DEFAULTS, translate_enabled=False, rules=[])
+        with patch('translation.urllib.request.urlopen') as request:
+            self.assertEqual(process(None, {'id': 1, 'content': 'Bonjour',
+                'custom_fields': [{'field': 67, 'value': ''}], 'tags': [4]}, opts), 'skipped')
+            request.assert_not_called()
+
+    def test_translation_mode_ignores_rules(self):
+        opts = dict(DEFAULTS, translate_enabled=True, translate_url='http://localhost:5000',
+                    translate_field_id=67, translate_trigger='field_only', rules=[])
+        class Response:
+            def __enter__(self): return self
+            def __exit__(self, *args): pass
+            def read(self): return b'{"translatedText":"Hello"}'
+        with patch('translation.urllib.request.urlopen', return_value=Response()) as request:
+            self.assertEqual(process(None, {'id': 1, 'content': 'Bonjour',
+                'custom_fields': [{'field': 67, 'value': ''}], 'tags': []}, opts), 'dry_run')
+            request.assert_called_once()
+
     def test_disabled(self):
         self.assertIsNone(translate_text('Bonjour',DEFAULTS))
     def test_translation_to_selected_field(self):

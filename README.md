@@ -4,7 +4,7 @@
 
 ## Приложения
 
-- **FinWorkspace** — приложение для управления финансами (синхронизируется из [FinWorkspace-HA](https://github.com/immortalserg/FinWorkspace-HA)).
+- **FinWorkspace** — приложение для управления финансами; дополнение Home Assistant теперь разрабатывается и публикуется напрямую из этого репозитория. [Инструкция](finworkspace/README.md).
 - **Paperless Auto Metadata** — обработка OCR с пользовательскими правилами и необязательным переводом.
 - **LibreTranslate** - локальный сервер перевода для Home Assistant и Paperless Auto Metadata. После установки API доступен на `http://HOME_ASSISTANT_IP:5000` (только в доверенной сети).
 

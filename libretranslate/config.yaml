@@ -1,0 +1,29 @@
+name: LibreTranslate
+version: "1.0.0"
+slug: libretranslate
+description: Local offline-capable translation API powered by LibreTranslate
+url: https://github.com/immortalserg/ha-apps
+arch:
+  - amd64
+  - aarch64
+init: false
+startup: services
+boot: auto
+ports:
+  5000/tcp: 5000
+ports_description:
+  5000/tcp: LibreTranslate HTTP API and web interface (LAN only recommended)
+webui: http://[HOST]:[PORT:5000]
+panel_icon: mdi:translate
+options:
+  languages: "en,fr,de,ru"
+  char_limit: 15000
+  req_limit: 30
+  threads: 2
+  update_models: false
+schema:
+  languages: str
+  char_limit: int(100,50000)
+  req_limit: int(1,10000)
+  threads: int(1,16)
+  update_models: bool

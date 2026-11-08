@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Paperless-ngx OCR metadata extraction with an ingress web interface."""
 import hashlib
+import hmac
+import secrets
 import html
 import json
 import logging
@@ -13,6 +15,7 @@ import urllib.request
 from decimal import Decimal, InvalidOperation
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from rules import DEFAULT_RULES, validate_rules, extract_rules, extraction_preview
 
 DATA = Path('/data')
 OPTIONS_FILE = DATA / 'options.json'
@@ -29,6 +32,8 @@ DEFAULTS = {
     'iban_regex': r'^\s*IBAN\s*:?\s*(LU(?:[ \t]*[A-Z0-9]){18})\b',
     'purpose_regex': r'^\s*Communication\s*:\s*([^\r\n]+)',
 }
+DEFAULTS['rules'] = DEFAULT_RULES
+csrf_token = secrets.token_urlsafe(32)
 lock = threading.RLock()
 status = {'last_scan': '—', 'updated': 0, 'dry_run': 0, 'skipped': 0, 'errors': 0, 'last_error': '', 'last_result': ''}
 run_now = threading.Event()
@@ -62,27 +67,15 @@ def capture(content, pattern):
 
 
 def extract(content, opts=None):
+    """Legacy preview shape, backed by user-configurable rules."""
     o = opts or DEFAULTS
-    name = capture(content, o['beneficiary_regex'])
-    purpose = capture(content, o['purpose_regex'])
-    raw_amount = capture(content, o['amount_regex'])
-    raw_iban = capture(content, o['iban_regex'])
-    if not all((name, purpose, raw_amount, raw_iban)):
+    matches = extract_rules(content, o.get('rules', DEFAULT_RULES))
+    if matches is None:
         return None
-    iban = re.sub(r'\s+', '', raw_iban).upper()
-    if not re.fullmatch(r'LU\d{18}', iban):
-        return None
-    number = re.sub(r'[\s\u00a0\u202f]', '', raw_amount)
-    if ',' in number:
-        number = number.replace('.', '').replace(',', '.')
-    try:
-        amount = Decimal(number).quantize(Decimal('0.01'))
-        if not amount.is_finite() or amount < 0:
-            return None
-    except InvalidOperation:
-        return None
-    return {'beneficiary': name, 'iban': iban, 'amount': str(amount), 'purpose': purpose,
-            'title': o['title_prefix'] + purpose}
+    values = {r['name']: r['value'] for r in matches}
+    if 'amount' in values and values['amount'].startswith(('EUR', 'USD')):
+        values['amount'] = values['amount'][3:]
+    return values
 
 
 class Paperless:
@@ -130,24 +123,33 @@ class Paperless:
 
 
 def process(client, doc, opts):
-    result = extract(doc.get('content') or '', opts)
-    if result is None:
+    matches = extract_rules(doc.get('content') or '', opts.get('rules', DEFAULT_RULES))
+    if matches is None:
         return 'skipped'
     custom = {int(f['field']): f['value'] for f in (doc.get('custom_fields') or [])}
-    amount = result['amount']
-    amount_value = 'EUR' + amount if opts['amount_format'] == 'monetary' else amount
-    custom[int(opts['amount_field_id'])] = amount_value
-    custom[int(opts['iban_field_id'])] = result['iban']
-    custom[int(opts['purpose_field_id'])] = result['purpose']
-    if opts['dry_run']:
-        LOG.info('DRY RUN #%s title=%r beneficiary=%r amount=%s iban=%s', doc['id'],
-                 result['title'], result['beneficiary'], amount_value, result['iban'])
+    payload = {}
+    beneficiary = None
+    for match in matches:
+        if match['target'] == 'custom_field':
+            custom[int(match['field_id'])] = match['value']
+        elif match['target'] == 'title':
+            payload['title'] = match['value']
+        elif match['target'] == 'correspondent':
+            beneficiary = match['value']
+    if opts.get('dry_run', True):
+        LOG.info('DRY RUN #%s mappings=%s', doc['id'],
+                 [(m['label'], m['target'], m['field_id'], m['value']) for m in matches])
         return 'dry_run'
-    correspondent = client.correspondent(result['beneficiary'])
-    payload = {'title': result['title'], 'correspondent': correspondent,
-               'custom_fields': [{'field': field, 'value': value} for field, value in sorted(custom.items())]}
+    if beneficiary is not None:
+        payload['correspondent'] = client.correspondent(beneficiary)
+    if custom != {int(f['field']): f['value'] for f in (doc.get('custom_fields') or [])}:
+        payload['custom_fields'] = [
+            {'field': field, 'value': value} for field, value in sorted(custom.items())
+        ]
+    if not payload:
+        return 'skipped'
     client.request('PATCH', f"/api/documents/{int(doc['id'])}/", payload)
-    LOG.info('Updated document #%s title=%r', doc['id'], result['title'])
+    LOG.info('Updated document #%s (%s rules)', doc['id'], len(matches))
     return 'updated'
 
 

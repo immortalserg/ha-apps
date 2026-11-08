@@ -47,6 +47,16 @@ if(event.target.matches('[data-delete]'))event.target.closest('.rule').remove();
 });
 
 const labels={"Статус":{"en":"Status","fr":"Statut","de":"Status"},"Подключение":{"en":"Connection","fr":"Connexion","de":"Verbindung"},"Перевод OCR":{"en":"OCR translation","fr":"Traduction OCR","de":"OCR-Übersetzung"},"Правила":{"en":"Rules","fr":"Règles","de":"Regeln"},"Проверить OCR-текст":{"en":"Test OCR text","fr":"Tester le texte OCR","de":"OCR-Text prüfen"},"Включить перевод":{"en":"Enable translation","fr":"Activer la traduction","de":"Übersetzung aktivieren"},"Язык интерфейса":{"en":"Interface language","fr":"Langue de l’interface","de":"Sprache der Oberfläche"},"Запуск перевода":{"en":"Translation trigger","fr":"Déclencheur","de":"Übersetzungsauslöser"},"Теги ИЛИ пустое поле":{"en":"Tags OR empty field","fr":"Tags OU champ vide","de":"Tags ODER leeres Feld"},"Только теги":{"en":"Tags only","fr":"Tags uniquement","de":"Nur Tags"},"Только пустое поле":{"en":"Empty field only","fr":"Champ vide uniquement","de":"Nur leeres Feld"},"Поле Paperless для перевода":{"en":"Translation field","fr":"Champ de traduction","de":"Übersetzungsfeld"},"Адрес LibreTranslate":{"en":"LibreTranslate URL","fr":"Adresse LibreTranslate","de":"LibreTranslate-Adresse"},"Условие для выбранных тегов":{"en":"Tag matching","fr":"Correspondance des tags","de":"Tag-Abgleich"},"Любой из тегов (ИЛИ)":{"en":"Any tag (OR)","fr":"Un tag (OU)","de":"Beliebiger Tag (ODER)"},"Все выбранные теги (И)":{"en":"All tags (AND)","fr":"Tous les tags (ET)","de":"Alle Tags (UND)"},"Максимум символов":{"en":"Maximum characters","fr":"Maximum de caractères","de":"Maximale Zeichen"},"Язык оригинала (auto)":{"en":"Source language (auto)","fr":"Langue source (auto)","de":"Ausgangssprache (auto)"},"Язык перевода (ru, en, fr, de...)":{"en":"Target language","fr":"Langue cible","de":"Zielsprache"},"Проверить документы сейчас":{"en":"Scan now","fr":"Vérifier maintenant","de":"Jetzt prüfen"},"Сохранить настройки":{"en":"Save settings","fr":"Enregistrer","de":"Speichern"},"Проверить выражения":{"en":"Test rules","fr":"Tester les règles","de":"Regeln prüfen"},"+ Добавить правило":{"en":"+ Add rule","fr":"+ Ajouter une règle","de":"+ Regel hinzufügen"},"Удалить":{"en":"Delete","fr":"Supprimer","de":"Löschen"},"Название правила":{"en":"Rule name","fr":"Nom de la règle","de":"Regelname"},"Включено":{"en":"Enabled","fr":"Activé","de":"Aktiviert"},"Обязательно":{"en":"Required","fr":"Obligatoire","de":"Erforderlich"},"Назначение":{"en":"Destination","fr":"Destination","de":"Ziel"},"Поле Paperless":{"en":"Paperless field","fr":"Champ Paperless","de":"Paperless-Feld"},"Преобразование":{"en":"Transform","fr":"Transformation","de":"Umwandlung"},"Префикс":{"en":"Prefix","fr":"Préfixe","de":"Präfix"},"Да":{"en":"Yes","fr":"Oui","de":"Ja"},"Нет":{"en":"No","fr":"Non","de":"Nein"},"Пользовательское поле":{"en":"Custom field","fr":"Champ personnalisé","de":"Benutzerdefiniertes Feld"},"Корреспондент":{"en":"Correspondent","fr":"Correspondant","de":"Korrespondent"},"Название документа":{"en":"Document title","fr":"Titre du document","de":"Dokumenttitel"},"— Выбери поле «Длинный текст» —":{"en":"— Select long-text field —","fr":"— Choisir texte long —","de":"— Langtextfeld auswählen —"}};
+labels["Язык оригинала"]={en:"Source language",fr:"Langue source",de:"Ausgangssprache"};
+labels["Язык перевода"]={en:"Target language",fr:"Langue cible",de:"Zielsprache"};
+labels["Тестовый режим: не изменять документы"]={en:"Dry run: do not modify documents",fr:"Mode test : ne pas modifier les documents",de:"Testmodus: Dokumente nicht ändern"};
+labels["Теги для перевода (необязательно; Ctrl/⌘ для выбора нескольких)"]={en:"Translation tags (optional; Ctrl/⌘ for multiple)",fr:"Tags de traduction (facultatif ; Ctrl/⌘ pour plusieurs)",de:"Übersetzungs-Tags (optional; Strg/⌘ für mehrere)"};
+labels["API-ключ LibreTranslate (необязательно)"]={en:"LibreTranslate API key (optional)",fr:"Clé API LibreTranslate (facultatif)",de:"LibreTranslate-API-Schlüssel (optional)"};
+labels["Адрес Paperless-ngx"]={en:"Paperless-ngx URL",fr:"Adresse Paperless-ngx",de:"Paperless-ngx-Adresse"};
+labels["Проверять каждые N секунд"]={en:"Check every N seconds",fr:"Vérifier toutes les N secondes",de:"Alle N Sekunden prüfen"};
+labels["Сколько последних документов проверять"]={en:"Number of recent documents",fr:"Nombre de documents récents",de:"Anzahl aktueller Dokumente"};
+labels["Валюта для денежного поля"]={en:"Currency for monetary field",fr:"Devise du champ monétaire",de:"Währung des Geldfelds"};
+labels["Регулярное выражение (первая группа в скобках — извлекаемое значение)"]={en:"Regex (first capture group is extracted)",fr:"Regex (premier groupe capturé extrait)",de:"Regex (erste Gruppe wird extrahiert)"};
 function applyLanguage(){const lang=document.querySelector('[name=ui_language]').value;document.documentElement.lang=lang;const w=document.createTreeWalker(document.querySelector('main'),NodeFilter.SHOW_TEXT);while(w.nextNode()){const n=w.currentNode,k=n.textContent.trim();if(labels[k]){if(!n.__original)n.__original=k;n.textContent=labels[n.__original]?.[lang]||n.__original;}else if(n.__original){n.textContent=labels[n.__original]?.[lang]||n.__original;}}}
 document.querySelector('[name=ui_language]').addEventListener('change',applyLanguage);applyLanguage();
 """
@@ -243,6 +253,8 @@ def make_handler(settings, status, lock, run_now, paperless_class, write_json, s
             else:
                 translate_field = ('<input type="number" min="0" name="translate_field_id" value="' +
                                    esc(translation_field_id) + '">')
+            source_options = select('translate_source', opts.get('translate_source','auto'), [('auto','Auto'),('ru','Русский'),('en','English'),('fr','Français'),('de','Deutsch')])
+            target_options = select('translate_target', opts.get('translate_target','ru'), [('ru','Русский'),('en','English'),('fr','Français'),('de','Deutsch')])
             language_options = select('ui_language', opts.get('ui_language','ru'), [('ru','Русский'),('en','English'),('fr','Français'),('de','Deutsch')])
             preview_html = ('<h3>Результат проверки</h3><pre>' +
                             esc(json.dumps(preview,ensure_ascii=False,indent=2)) +
@@ -272,9 +284,8 @@ def make_handler(settings, status, lock, run_now, paperless_class, write_json, s
 <select name="translate_tag_ids" multiple size="5">{tag_options}</select></label>
 <label>Условие для выбранных тегов{select('translate_tag_match', opts.get('translate_tag_match','any'), [('any','Любой из тегов (ИЛИ)'),('all','Все выбранные теги (И)')])}</label>
 <label>Запуск перевода{select('translate_trigger', opts.get('translate_trigger','tag_or_field'), [('tag_or_field','Теги ИЛИ пустое поле'),('tag_only','Только теги'),('field_only','Только пустое поле')])}</label>
-<label>Язык оригинала (auto)<input name="translate_source" value="{esc(opts.get('translate_source','auto'))}"></label>
-<label>Язык перевода (ru, en, fr, de...)<input name="translate_target"
- value="{esc(opts.get('translate_target','ru'))}"></label>
+<label>Язык оригинала{source_options}</label>
+<label>Язык перевода{target_options}</label>
 <label>Максимум символов<input type="number" name="translate_max_chars" min="1" max="50000"
  value="{esc(opts.get('translate_max_chars',12000))}"></label>
 <label>API-ключ LibreTranslate (необязательно)<input type="password" name="translate_api_key"

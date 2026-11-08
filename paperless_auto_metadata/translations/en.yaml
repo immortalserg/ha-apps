@@ -1,22 +1,11 @@
 configuration:
   paperless_url:
     name: Paperless-ngx URL
-    description: URL of your Paperless instance on the local network
   api_token:
     name: Paperless API token
   poll_seconds:
     name: Scan interval (seconds)
   scan_documents:
     name: Number of newest documents to scan
-  amount_field_id:
-    name: Amount custom field ID
-  iban_field_id:
-    name: IBAN custom field ID
-  purpose_field_id:
-    name: Purpose custom field ID
-  amount_format:
-    name: Amount format
-  title_prefix:
-    name: Document title prefix
   dry_run:
     name: Test mode (no updates)

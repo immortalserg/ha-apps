@@ -20,10 +20,11 @@ class Tests(unittest.TestCase):
             def request(self,method,path,payload): self.payload=payload
         client=Client()
         opts=dict(DEFAULTS,translate_enabled=True,translate_url='http://localhost:5000',
-                  translate_field_id=67,translate_target='en',dry_run=False)
+                  translate_field_id=67,translate_target='en',dry_run=False,
+                  translate_tag_ids=[4])
         with patch('translation.urllib.request.urlopen',return_value=Response()) as request:
             result=process(client,{'id':1,'content':'Bonjour le monde',
-                'custom_fields':[{'field':8,'value':'keep'}]},opts)
+                'custom_fields':[{'field':8,'value':'keep'}], 'tags':[4]},opts)
         self.assertEqual(result,'updated')
         self.assertEqual({x['field']:x['value'] for x in client.payload['custom_fields']},
                          {8:'keep',67:'Hello world'})

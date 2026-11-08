@@ -177,7 +177,7 @@ def scan_once():
                 counts['skipped'] += 1
                 LOG.info('Document #%s has no OCR content yet; will retry', doc_id)
                 continue
-            fingerprint = hashlib.sha256((opts_fingerprint + content).encode()).hexdigest()
+            fingerprint = hashlib.sha256(('v1.2.1-detail:' + opts_fingerprint + content).encode()).hexdigest()
             if state.get(doc_id) == fingerprint:
                 continue
             outcome = process(client, doc, opts)

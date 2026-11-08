@@ -6,8 +6,14 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'paperless_auto_metadata'))
 from translation import translate_text
 from main import DEFAULTS, process
+from rule_web import is_long_text_field
 
 class Tests(unittest.TestCase):
+    def test_paperless_longtext_api_type(self):
+        self.assertTrue(is_long_text_field({'id': 1, 'data_type': 'longtext'}))
+        self.assertFalse(is_long_text_field({'id': 2, 'data_type': 'string'}))
+        self.assertFalse(is_long_text_field({'id': 3, 'data_type': 'long_text'}))
+
     def test_disabled(self):
         self.assertIsNone(translate_text('Bonjour',DEFAULTS))
     def test_translation_to_selected_field(self):

@@ -4,7 +4,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'paperless_auto_met
 from rules import validate_rules, extract_rules, extraction_preview, DEFAULT_RULES
 from rule_web import read_settings_form
 
-RULE={'name':'number','label':'Number','pattern':r'Number (\\d+)',
+RULE={'name':'number','label':'Number','pattern':r'Number (\d+)',
 'target':'custom_field','field_id':12,'transform':'text','prefix':'','currency':'EUR',
 'enabled':True,'required':True}
 

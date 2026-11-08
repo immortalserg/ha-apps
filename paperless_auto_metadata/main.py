@@ -221,7 +221,16 @@ def scan_once(full_translation=False):
     if full_translation and opts.get('translate_enabled'):
         summaries = list(client.pages('/api/documents/?page_size=100&ordering=-id'))
     else:
-        summaries = recent
+        # Include recently edited old documents so adding a translation tag or
+        # destination field triggers translation without rerunning OCR rules.
+        summaries = list(recent)
+        if opts.get('translate_enabled'):
+            modified = list(client.pages('/api/documents/?page_size=100&ordering=-modified'))
+            seen = {str(item['id']) for item in summaries}
+            for item in modified[:int(opts['scan_documents'])]:
+                if str(item['id']) not in seen:
+                    summaries.append(item)
+                    seen.add(str(item['id']))
     recent_ids = {str(item['id']) for item in recent}
     for summary in reversed(summaries):
         doc_id = str(summary['id'])

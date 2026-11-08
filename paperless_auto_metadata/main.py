@@ -113,6 +113,9 @@ class Paperless:
                 break
         return results
 
+    def document(self, document_id):
+        return self.request('GET', f'/api/documents/{int(document_id)}/')
+
     def correspondent(self, name):
         # Search is advisory: always compare exact names to avoid near-match assignment.
         path = '/api/correspondents/?' + urllib.parse.urlencode({'name__icontains': name, 'page_size': 100})
@@ -162,17 +165,28 @@ def scan_once():
     documents = client.documents(int(opts['scan_documents']))
     counts = {'updated': 0, 'dry_run': 0, 'skipped': 0, 'errors': 0}
     opts_fingerprint = hashlib.sha256(json.dumps({k: v for k, v in opts.items() if k not in ('api_token', 'paperless_url', 'poll_seconds', 'scan_documents')}, sort_keys=True).encode()).hexdigest()
-    for doc in reversed(documents):
-        doc_id = str(doc['id'])
-        text = doc.get('content') or ''
-        fingerprint = hashlib.sha256((opts_fingerprint + text).encode()).hexdigest()
-        if state.get(doc_id) == fingerprint:
-            continue
+    for summary in reversed(documents):
+        doc_id = str(summary['id'])
         try:
+            # The list endpoint can omit OCR content or return a shortened record.
+            # Always fetch the full document before matching and writing fields.
+            doc = client.document(doc_id)
+            content = doc.get('content') or ''
+            if not content.strip():
+                # OCR may still be running. Never cache an empty document as done.
+                counts['skipped'] += 1
+                LOG.info('Document #%s has no OCR content yet; will retry', doc_id)
+                continue
+            fingerprint = hashlib.sha256(('v1.2.1-detail:' + opts_fingerprint + content).encode()).hexdigest()
+            if state.get(doc_id) == fingerprint:
+                continue
             outcome = process(client, doc, opts)
             counts[outcome] += 1
-            state[doc_id] = fingerprint
-            write_json(STATE_FILE, state)
+            # Only cache successful processing; skipped/unmatched documents can
+            # become matchable after OCR or rule changes.
+            if outcome in ('updated', 'dry_run'):
+                state[doc_id] = fingerprint
+                write_json(STATE_FILE, state)
         except (urllib.error.HTTPError, urllib.error.URLError, ValueError, KeyError, TypeError) as exc:
             counts['errors'] += 1
             LOG.error('Document #%s failed: %s', doc_id, exc)

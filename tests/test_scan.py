@@ -4,7 +4,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'paperless_auto_metadata'))
 import main
 
-RULE={'name':'invoice','label':'Invoice','pattern':r'Invoice (\\d+)',
+RULE={'name':'invoice','label':'Invoice','pattern':r'Invoice (\d+)',
 'target':'custom_field','field_id':8,'transform':'text','prefix':'','currency':'EUR',
 'enabled':True,'required':True}
 

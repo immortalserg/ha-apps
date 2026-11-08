@@ -49,7 +49,7 @@ def main():
     env = configure(options)
     print("Starting LibreTranslate on port 5000; models stored in /data/models", flush=True)
     # Upstream Docker image provides its own virtual environment and executable.
-    os.execvpe("/app/venv/bin/libretranslate", ["libretranslate"], env)
+    os.execvpe("/app/scripts/entrypoint.sh", ["/app/scripts/entrypoint.sh"], env)
 
 
 if __name__ == "__main__":

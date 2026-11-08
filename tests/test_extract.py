@@ -4,7 +4,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'paperless_auto_met
 from main import DEFAULTS, extract, process
 from rules import extract_rules, validate_rules
 
-RULE = {'name':'invoice','label':'Invoice','pattern':r'Invoice (\\d+)',
+RULE = {'name':'invoice','label':'Invoice','pattern':r'Invoice (\d+)',
 'target':'custom_field','field_id':8,'transform':'text','prefix':'','currency':'EUR',
 'enabled':True,'required':True}
 

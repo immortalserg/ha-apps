@@ -5,7 +5,7 @@ from pathlib import Path
 from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'paperless_auto_metadata'))
 from translation import translate_text
-from main import DEFAULTS, process
+from main import DEFAULTS, process, Paperless
 from rule_web import is_long_text_field
 
 class Tests(unittest.TestCase):
@@ -32,6 +32,21 @@ class Tests(unittest.TestCase):
             self.assertEqual(process(None, {'id': 1, 'content': 'Bonjour',
                 'custom_fields': [{'field': 67, 'value': ''}], 'tags': []}, opts), 'dry_run')
             request.assert_called_once()
+
+    def test_correspondent_creates_missing(self):
+        client = Paperless('http://paperless', 'token')
+        with patch.object(client, 'pages', return_value=iter([{'id': 3, 'name': 'Other'}])), \
+             patch.object(client, 'request', return_value={'id': 17}) as request:
+            self.assertEqual(client.correspondent('  New Supplier  '), 17)
+            request.assert_called_once_with('POST', '/api/correspondents/',
+                                            {'name': 'New Supplier'})
+
+    def test_correspondent_reuses_existing(self):
+        client = Paperless('http://paperless', 'token')
+        with patch.object(client, 'pages', return_value=iter([{'id': 9, 'name': 'ACME'}])), \
+             patch.object(client, 'request') as request:
+            self.assertEqual(client.correspondent('acme'), 9)
+            request.assert_not_called()
 
     def test_disabled(self):
         self.assertIsNone(translate_text('Bonjour',DEFAULTS))

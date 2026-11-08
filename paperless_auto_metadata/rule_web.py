@@ -140,6 +140,12 @@ def read_settings_form(form, old, paperless_class):
     opts['translate_tag_match'] = form.get('translate_tag_match', ['any'])[0]
     if opts['translate_tag_match'] not in ('any', 'all') or any(x <= 0 for x in opts['translate_tag_ids']):
         raise ValueError('Некорректные условия выбора тегов')
+    opts['translate_trigger'] = form.get('translate_trigger', ['tag_or_field'])[0]
+    opts['ui_language'] = form.get('ui_language', ['ru'])[0]
+    if opts['translate_trigger'] not in ('tag_or_field', 'tag_only', 'field_only'):
+        raise ValueError('Некорректное условие перевода')
+    if opts['ui_language'] not in ('ru', 'en', 'fr', 'de'):
+        raise ValueError('Некорректный язык интерфейса')
     new_key = form.get('translate_api_key', [''])[0]
     if new_key:
         opts['translate_api_key'] = new_key
@@ -221,24 +227,26 @@ def make_handler(settings, status, lock, run_now, paperless_class, write_json, s
             checked = ' checked' if opts.get('dry_run', True) else ''
             tr_checked = ' checked' if opts.get('translate_enabled') else ''
             translation_field_id = int(opts.get('translate_field_id') or 0)
-            text_fields = [field for field in fields if field.get('data_type') in ('string', 'text')]
+            text_fields = [field for field in fields if field.get('data_type') == 'long_text']
             if fields:
-                field_options = [(0, '— Выбери текстовое поле —')] + [
+                field_options = [(0, '— Выбери поле «Длинный текст» —')] + [
                     (int(field['id']), field['name'] + ' (ID ' + str(field['id']) + ')')
                     for field in text_fields]
+                # Keep old configuration visible, but do not allow a non-long-text field.
                 if translation_field_id and translation_field_id not in [v for v,_ in field_options]:
-                    field_options.append((translation_field_id, 'ID ' + str(translation_field_id)))
+                    field_options.append((translation_field_id, 'ID ' + str(translation_field_id) + ' (недоступно: не «Длинный текст»)'))
                 translate_field = select('translate_field_id', translation_field_id, field_options)
             else:
                 translate_field = ('<input type="number" min="0" name="translate_field_id" value="' +
                                    esc(translation_field_id) + '">')
+            language_options = select('ui_language', opts.get('ui_language','ru'), [('ru','Русский'),('en','English'),('fr','Français'),('de','Deutsch')])
             preview_html = ('<h3>Результат проверки</h3><pre>' +
                             esc(json.dumps(preview,ensure_ascii=False,indent=2)) +
                             '</pre>') if preview is not None else ''
             self.send_html(f"""<!doctype html><html lang="ru"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Paperless Auto Metadata</title><style>{STYLES}</style></head><body><main>
-<h1>Paperless Auto Metadata</h1>
+<div class="row"><h1>Paperless Auto Metadata</h1><label>Язык интерфейса{language_options}</label></div>
 <p class="muted">Гибкие правила поиска в OCR и сопоставления с полями Paperless-ngx</p>
 {notice}
 <section><h2>Статус</h2><div class="metrics">{metrics}</div>
@@ -249,7 +257,7 @@ def make_handler(settings, status, lock, run_now, paperless_class, write_json, s
 <label><input style="display:inline;width:auto" name="dry_run" type="checkbox"
  value="1"{checked}> Тестовый режим: не изменять документы</label></section>
 <section><h2>Перевод OCR</h2>
-<p class="muted">Перевод запускается только для документов с пустым целевым полем. Можно дополнительно ограничить документы тегами Paperless. Заполненные поля никогда не перезаписываются.</p>
+<p class="muted">Перевод запускается по выбранным тегам ИЛИ при наличии пустого пользовательского поля «Длинный текст». Заполненные поля не перезаписываются.</p>
 <label><input style="display:inline;width:auto" type="checkbox" name="translate_enabled"
  value="1"{tr_checked}> Включить перевод</label>
 <div class="row">
@@ -259,6 +267,7 @@ def make_handler(settings, status, lock, run_now, paperless_class, write_json, s
 <label>Теги для перевода (необязательно; Ctrl/⌘ для выбора нескольких)
 <select name="translate_tag_ids" multiple size="5">{tag_options}</select></label>
 <label>Условие для выбранных тегов{select('translate_tag_match', opts.get('translate_tag_match','any'), [('any','Любой из тегов (ИЛИ)'),('all','Все выбранные теги (И)')])}</label>
+<label>Запуск перевода{select('translate_trigger', opts.get('translate_trigger','tag_or_field'), [('tag_or_field','Теги ИЛИ пустое поле'),('tag_only','Только теги'),('field_only','Только пустое поле')])}</label>
 <label>Язык оригинала (auto)<input name="translate_source" value="{esc(opts.get('translate_source','auto'))}"></label>
 <label>Язык перевода (ru, en, fr, de...)<input name="translate_target"
  value="{esc(opts.get('translate_target','ru'))}"></label>
@@ -267,7 +276,7 @@ def make_handler(settings, status, lock, run_now, paperless_class, write_json, s
 <label>API-ключ LibreTranslate (необязательно)<input type="password" name="translate_api_key"
  autocomplete="new-password" placeholder="Оставь пустым, чтобы сохранить"></label>
 </div>
-<p class="muted">Если теги не выбраны, переводятся документы с пустым полем. Если теги выбраны, переводятся только документы с пустым полем и соответствующими тегами.</p>
+<p class="muted">Теги ИЛИ поле: перевод запускается, если совпал тег либо документ уже содержит пустое целевое поле. При выборе только тегов поле может отсутствовать. Заполненное поле всегда сохраняется.</p>
 </section>
 <section><h2>Правила</h2>
 <p class="muted">По умолчанию правил нет. Добавляй любые регулярные выражения и выбирай назначение.

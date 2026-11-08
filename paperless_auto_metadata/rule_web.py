@@ -130,6 +130,24 @@ def read_settings_form(form, old, paperless_class):
             'prefix': prefix, 'currency': currency
         })
     opts['rules'] = validate_rules(rules)
+    opts['translate_enabled'] = form.get('translate_enabled', ['0'])[0] == '1'
+    opts['translate_url'] = form.get('translate_url', [''])[0].strip()
+    opts['translate_source'] = form.get('translate_source', ['auto'])[0].strip()
+    opts['translate_target'] = form.get('translate_target', ['ru'])[0].strip()
+    opts['translate_field_id'] = int(form.get('translate_field_id', ['0'])[0] or 0)
+    opts['translate_max_chars'] = int(form.get('translate_max_chars', ['12000'])[0])
+    new_key = form.get('translate_api_key', [''])[0]
+    if new_key:
+        opts['translate_api_key'] = new_key
+    if opts['translate_enabled']:
+        if not opts['translate_url'].startswith(('http://', 'https://')):
+            raise ValueError('Укажи адрес сервера LibreTranslate')
+        if opts['translate_field_id'] < 1:
+            raise ValueError('Выбери пользовательское поле для перевода')
+        if not 1 <= opts['translate_max_chars'] <= 50000:
+            raise ValueError('Размер перевода: от 1 до 50000 символов')
+        if not opts['translate_source'] or not opts['translate_target']:
+            raise ValueError('Укажи языки перевода')
     return opts
 
 
@@ -184,6 +202,19 @@ def make_handler(settings, status, lock, run_now, paperless_class, write_json, s
                                'transform':'text','prefix':'','currency':'EUR',
                                'enabled':True,'required':False}, fields)
             checked = ' checked' if opts.get('dry_run', True) else ''
+            tr_checked = ' checked' if opts.get('translate_enabled') else ''
+            translation_field_id = int(opts.get('translate_field_id') or 0)
+            text_fields = [field for field in fields if field.get('data_type') in ('string', 'text')]
+            if fields:
+                field_options = [(0, '— Выбери текстовое поле —')] + [
+                    (int(field['id']), field['name'] + ' (ID ' + str(field['id']) + ')')
+                    for field in text_fields]
+                if translation_field_id and translation_field_id not in [v for v,_ in field_options]:
+                    field_options.append((translation_field_id, 'ID ' + str(translation_field_id)))
+                translate_field = select('translate_field_id', translation_field_id, field_options)
+            else:
+                translate_field = ('<input type="number" min="0" name="translate_field_id" value="' +
+                                   esc(translation_field_id) + '">')
             preview_html = ('<h3>Результат проверки</h3><pre>' +
                             esc(json.dumps(preview,ensure_ascii=False,indent=2)) +
                             '</pre>') if preview is not None else ''
@@ -200,8 +231,26 @@ def make_handler(settings, status, lock, run_now, paperless_class, write_json, s
 <section><h2>Подключение</h2><div class="row">{''.join(inputs)}</div>
 <label><input style="display:inline;width:auto" name="dry_run" type="checkbox"
  value="1"{checked}> Тестовый режим: не изменять документы</label></section>
+<section><h2>Перевод OCR</h2>
+<p class="muted">Необязательная функция: переводит весь распознанный текст через LibreTranslate
+и сохраняет перевод в выбранное текстовое пользовательское поле Paperless.</p>
+<label><input style="display:inline;width:auto" type="checkbox" name="translate_enabled"
+ value="1"{tr_checked}> Включить перевод</label>
+<div class="row">
+<label>Адрес LibreTranslate<input type="url" name="translate_url"
+ placeholder="http://libretranslate:5000" value="{esc(opts.get('translate_url',''))}"></label>
+<label>Поле Paperless для перевода{translate_field}</label>
+<label>Язык оригинала (auto)<input name="translate_source" value="{esc(opts.get('translate_source','auto'))}"></label>
+<label>Язык перевода (ru, en, fr, de...)<input name="translate_target"
+ value="{esc(opts.get('translate_target','ru'))}"></label>
+<label>Максимум символов<input type="number" name="translate_max_chars" min="1" max="50000"
+ value="{esc(opts.get('translate_max_chars',12000))}"></label>
+<label>API-ключ LibreTranslate (необязательно)<input type="password" name="translate_api_key"
+ autocomplete="new-password" placeholder="Оставь пустым, чтобы сохранить"></label>
+</div>
+</section>
 <section><h2>Правила</h2>
-<p class="muted">Добавляй любые регулярные выражения и выбирай назначение.
+<p class="muted">По умолчанию правил нет. Добавляй любые регулярные выражения и выбирай назначение.
 У каждого выражения должна быть захватывающая группа в круглых скобках.
 Если обязательное правило не совпало, документ пропускается.</p>
 <div id="rules">{cards}</div><button id="add-rule" type="button" class="secondary">+ Добавить правило</button>

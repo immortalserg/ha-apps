@@ -63,6 +63,8 @@ labels["Перевод запускается по выбранным тегам
 labels["Теги ИЛИ поле: перевод запускается, если совпал тег либо документ уже содержит пустое целевое поле. При выборе только тегов поле может отсутствовать. Заполненное поле всегда сохраняется."]={en:"Tags OR field: translate when a tag matches or the destination field exists and is empty. With tags only, the field may be absent. Filled fields are preserved.",fr:"Tags OU champ : traduire si un tag correspond ou si le champ cible existe et est vide. En mode tags seuls, le champ peut être absent. Les champs remplis sont préservés.",de:"Tags ODER Feld: übersetzen, wenn ein Tag passt oder das Zielfeld vorhanden und leer ist. Bei Nur-Tags darf das Feld fehlen. Gefüllte Felder bleiben erhalten."};
 labels["Можно проверить изменения до сохранения; данные Paperless не изменятся."]={en:"Test before saving; Paperless documents will not be changed.",fr:"Testez avant d’enregistrer ; les documents Paperless ne seront pas modifiés.",de:"Vor dem Speichern testen; Paperless-Dokumente werden nicht verändert."};
 labels["По умолчанию правил нет. Добавляй любые регулярные выражения и выбирай назначение. У каждого выражения должна быть захватывающая группа в круглых скобках. Если обязательное правило не совпало, документ пропускается."]={en:"No default rules. Add regex patterns and choose their destination. Each regex needs a capture group. Documents without a required match are skipped.",fr:"Aucune règle par défaut. Ajoutez des expressions régulières et choisissez leur destination. Chaque expression doit avoir un groupe capturant. Les documents sans correspondance obligatoire sont ignorés.",de:"Keine Standardregeln. Reguläre Ausdrücke und Ziel wählen. Jeder Ausdruck braucht eine Erfassungsgruppe. Dokumente ohne erforderlichen Treffer werden übersprungen."};
+labels['Проверить последние документы']={en:'Scan recent documents',fr:'Vérifier les documents récents',de:'Neueste Dokumente prüfen'};
+labels['Перевести существующие документы (полный проход)']={en:'Translate existing documents (full scan)',fr:'Traduire les documents existants (analyse complète)',de:'Vorhandene Dokumente übersetzen (vollständiger Durchlauf)'};
 function applyLanguage(){const lang=document.querySelector('[name=ui_language]').value;document.documentElement.lang=lang;const w=document.createTreeWalker(document.querySelector('main'),NodeFilter.SHOW_TEXT);while(w.nextNode()){const n=w.currentNode,k=n.textContent.trim().replace(/\\s+/g,' ');if(labels[k]&&!n.__original)n.__original=k;if(n.__original)n.textContent=labels[n.__original]?.[lang]||n.__original;}}
 document.querySelector('[name=ui_language]').addEventListener('change',applyLanguage);applyLanguage();
 """
@@ -190,7 +192,7 @@ def read_settings_form(form, old, paperless_class):
     return opts
 
 
-def make_handler(settings, status, lock, run_now, paperless_class, write_json, settings_file):
+def make_handler(settings, status, lock, run_now, paperless_class, write_json, settings_file, full_translation_scan=None):
     class Handler(BaseHTTPRequestHandler):
         def permitted(self):
             # Home Assistant ingress proxy; localhost is allowed for tests.
@@ -283,7 +285,7 @@ def make_handler(settings, status, lock, run_now, paperless_class, write_json, s
 {notice}
 <section><h2>Статус</h2><div class="metrics">{metrics}</div>
 <form method="post"><input type="hidden" name="csrf" value="{CSRF}">
-<button name="action" value="scan">Проверить документы сейчас</button></form></section>
+<button name="action" value="scan">Проверить последние документы</button>\n<button name="action" value="scan_all_translations">Перевести существующие документы (полный проход)</button></form></section>
 <form method="post"><input type="hidden" name="csrf" value="{CSRF}">
 <section><h2>Подключение</h2><div class="row">{''.join(inputs)}</div>
 <label><input style="display:inline;width:auto" name="dry_run" type="checkbox"
@@ -342,6 +344,12 @@ def make_handler(settings, status, lock, run_now, paperless_class, write_json, s
                     self.send_error(403, 'Invalid form token')
                     return
                 action = form.get('action', [''])[0]
+                if action == 'scan_all_translations':
+                    if full_translation_scan is not None:
+                        full_translation_scan.set()
+                    run_now.set()
+                    self.page('Запрошена проверка перевода всех документов; правила применяются только к последним документам.')
+                    return
                 if action == 'scan':
                     run_now.set()
                     self.page('Проверка запущена.')

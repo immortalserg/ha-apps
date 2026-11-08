@@ -1,0 +1,17 @@
+configuration:
+  languages:
+    name: Языки
+    description: Коды языков через запятую (например en,fr,de,ru).
+  char_limit:
+    name: Максимальная длина текста
+    description: Максимум символов на один запрос перевода.
+  req_limit:
+    name: Запросов в минуту
+    description: Максимум запросов от одного клиента.
+  threads:
+    name: Рабочие потоки
+  update_models:
+    name: Обновлять языковые модели
+    description: Загружать обновления моделей при запуске.
+network:
+  5000/tcp: HTTP API перевода (только доверенная локальная сеть)

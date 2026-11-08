@@ -47,3 +47,8 @@
 ```bash
 python3 -m unittest discover -s tests -v
 ```
+
+
+## LibreTranslate
+
+[LibreTranslate](libretranslate/README.md) — локальный сервер перевода для Home Assistant и Paperless Auto Metadata. После установки API доступен на `http://HOME_ASSISTANT_IP:5000` (только в доверенной сети).

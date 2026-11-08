@@ -1,0 +1,17 @@
+configuration:
+  languages:
+    name: Languages
+    description: Comma-separated language codes to load (e.g. en,fr,de,ru).
+  char_limit:
+    name: Maximum text length
+    description: Maximum characters per translation request.
+  req_limit:
+    name: Requests per minute
+    description: Maximum requests per minute per client.
+  threads:
+    name: Worker threads
+  update_models:
+    name: Update language models
+    description: Download updated models on startup.
+network:
+  5000/tcp: HTTP translation API (keep on a trusted LAN)

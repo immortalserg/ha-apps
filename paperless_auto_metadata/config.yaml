@@ -1,5 +1,5 @@
 name: Paperless Auto Metadata
-version: "1.2.0"
+version: "1.2.1"
 slug: paperless_auto_metadata
 description: Configurable OCR regex rules and custom field mapping for Paperless-ngx
 url: https://github.com/immortalserg/ha-apps
